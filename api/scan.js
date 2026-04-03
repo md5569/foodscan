@@ -1,5 +1,5 @@
 // api/scan.js
-export default async function handler(req, res) {
+module.exports = async (req, res) {
   // 1. 프론트엔드에서 보낸 바코드 번호 수신
   const { barcode } = req.query;
 
