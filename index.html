@@ -1,101 +1,44 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>초경량 바코드 성분 스캐너</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; word-break: keep-all; overflow-wrap: break-word; margin: 0; }
-        .container { max-width: 100%; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); box-sizing: border-box; }
-        h2 { margin-top: 0; }
-        #reader { width: 100%; margin-bottom: 20px; }
-        .result-box { margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; display: none; box-sizing: border-box; }
-        .danger { color: #d9534f; font-weight: bold; }
-        .btn { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; text-align: center; color: #fff; background: #ea4335; border: none; border-radius: 8px; margin-top: 15px; text-decoration: none; cursor: pointer; box-sizing: border-box; }
-    </style>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-</head>
-<body>
-    <div class="container">
-        <h2>초경량 바코드 스캐너</h2>
-        <p>상품의 바코드를 사각형 안에 맞춰주시기 바랍니다.</p>
+<script>
+    function onScanSuccess(decodedText, decodedResult) {
+        if (!isScanning) return;
+        isScanning = false;
         
-        <div id="reader"></div>
-
-        <div id="resultBox" class="result-box">
-            <h3>분석 결과</h3>
-            <p><strong>제품명:</strong> <span id="productName">조회 중...</span></p>
-            <p><strong>발견된 주의 성분:</strong> <br><span id="badList">분석 중...</span></p>
-            <p><strong>안전 점수:</strong> <span id="score" class="danger"></span></p>
-            <a href="#" id="googleSearchBtn" class="btn" target="_blank" style="display:none;">🔍 구글에서 대체품 찾기</a>
-        </div>
-    </div>
-
-    <script>
-        const resultBox = document.getElementById('resultBox');
-        const productNameEl = document.getElementById('productName');
-        const badListEl = document.getElementById('badList');
-        const scoreEl = document.getElementById('score');
-        const googleSearchBtn = document.getElementById('googleSearchBtn');
-
-        // 유해 성분 사전 (점수 감점 로직)
-        const badIngredientsDB = {
-            "sugar": 10, "fructose": 20, "syrup": 15, "artificial": 15, "color": 10
-        };
-
-        function onScanSuccess(decodedText, decodedResult) {
-            // 스캔 성공 시 스캐너 일시 정지 후 결과창 표시
-            html5QrcodeScanner.pause();
-            resultBox.style.display = 'block';
-            productNameEl.innerText = "바코드(" + decodedText + ") 데이터 조회 중...";
-            
-            // Open Food Facts API 호출 (인증키 없이 무료 호출 가능)
-            fetch(`https://world.openfoodfacts.org/api/v0/product/${decodedText}.json`)
-                .then(res => res.json())
-                .then(data => {
-                    if(data.status === 1 && data.product) {
-                        const product = data.product;
-                        productNameEl.innerText = product.product_name || "이름 정보 없음";
-                        
-                        let ingredientsText = (product.ingredients_text || "").toLowerCase();
-                        let score = 100;
-                        let foundBad = [];
-
-                        // 성분 분석
-                        for (let key in badIngredientsDB) {
-                            if (ingredientsText.includes(key)) {
-                                score -= badIngredientsDB[key];
-                                foundBad.push(key);
-                            }
-                        }
-
-                        if (foundBad.length > 0) {
-                            badListEl.innerText = foundBad.join(", ");
-                            googleSearchBtn.href = "https://www.google.com/search?q=" + encodeURIComponent(product.product_name + " 대체품");
-                            googleSearchBtn.style.display = 'block';
-                        } else {
-                            badListEl.innerText = "등록된 위험 성분 없음 (또는 영문 성분 데이터 없음)";
-                        }
-                        
-                        scoreEl.innerText = score + " / 100 점";
-                    } else {
-                        productNameEl.innerText = "글로벌 DB에 등록되지 않은 상품입니다.";
-                        badListEl.innerText = "-";
-                        scoreEl.innerText = "-";
-                    }
+        html5QrCode.pause();
+        resultBox.style.display = 'block';
+        productNameEl.innerText = "바코드(" + decodedText + ") 자체 서버 조회 중...";
+        
+        // 외부 API가 아닌 우리가 Vercel에 만든 자체 백엔드(/api/scan)로 요청 전송
+        fetch(`/api/scan?barcode=${decodedText}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    productNameEl.innerText = data.productName;
                     
-                    // 3초 후 스캐너 재개
-                    setTimeout(() => { html5QrcodeScanner.resume(); }, 3000);
-                })
-                .catch(err => {
-                    productNameEl.innerText = "데이터 조회 실패";
-                    setTimeout(() => { html5QrcodeScanner.resume(); }, 3000);
-                });
-        }
-
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", { fps: 10, qrbox: 250 });
-        html5QrcodeScanner.render(onScanSuccess);
-    </script>
-</body>
-</html>
+                    if (data.badIngredients.length > 0) {
+                        badListEl.innerText = data.badIngredients.join(", ");
+                        googleSearchBtn.href = "https://www.google.com/search?q=" + encodeURIComponent(data.productName + " 대체품");
+                        googleSearchBtn.style.display = 'block';
+                    } else {
+                        badListEl.innerText = "위험 성분 없음";
+                    }
+                    scoreEl.innerText = data.score + " / 100 점";
+                } else {
+                    productNameEl.innerText = data.message;
+                    badListEl.innerText = "-";
+                    scoreEl.innerText = "-";
+                }
+                
+                setTimeout(() => { 
+                    isScanning = true; 
+                    html5QrCode.resume(); 
+                }, 3000);
+            })
+            .catch(err => {
+                productNameEl.innerText = "백엔드 서버 접속 실패입니다.";
+                setTimeout(() => { 
+                    isScanning = true; 
+                    html5QrCode.resume(); 
+                }, 3000);
+            });
+    }
+</script>
