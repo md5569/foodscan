@@ -3,103 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>스마트 성분 스캐너</title>
+    <title>초경량 바코드 성분 스캐너</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #f4f4f4; word-break: keep-all; overflow-wrap: break-word; margin: 0; }
         .container { max-width: 100%; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); box-sizing: border-box; }
         h2 { margin-top: 0; }
-        img { max-width: 100%; height: auto; display: block; margin-top: 15px; border-radius: 8px; }
-        input[type="file"] { display: none; }
-        .btn { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; text-align: center; color: #fff; background: #007bff; border: none; border-radius: 8px; margin-top: 10px; cursor: pointer; text-decoration: none; box-sizing: border-box; word-break: keep-all; }
-        .btn-search { background: #ea4335; display: none; margin-top: 20px; }
+        #reader { width: 100%; margin-bottom: 20px; }
         .result-box { margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; display: none; box-sizing: border-box; }
         .danger { color: #d9534f; font-weight: bold; }
+        .btn { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; text-align: center; color: #fff; background: #ea4335; border: none; border-radius: 8px; margin-top: 15px; text-decoration: none; cursor: pointer; box-sizing: border-box; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
     <div class="container">
-        <h2>스마트 성분 스캐너</h2>
-        <p>스마트폰 카메라로 상품의 성분표를 촬영해 주시기 바랍니다.</p>
-
-        <label for="cameraInput" class="btn">📷 카메라로 성분표 찍기</label>
-        <input type="file" id="cameraInput" accept="image/*" capture="environment">
-
-        <img id="preview" style="display:none;" alt="촬영된 이미지">
+        <h2>초경량 바코드 스캐너</h2>
+        <p>상품의 바코드를 사각형 안에 맞춰주시기 바랍니다.</p>
+        
+        <div id="reader"></div>
 
         <div id="resultBox" class="result-box">
-            <h3 id="status">분석 대기 중...</h3>
-            <p><strong>발견된 성분:</strong> <br><span id="scannedText"></span></p>
+            <h3>분석 결과</h3>
+            <p><strong>제품명:</strong> <span id="productName">조회 중...</span></p>
+            <p><strong>발견된 주의 성분:</strong> <br><span id="badList">분석 중...</span></p>
             <p><strong>안전 점수:</strong> <span id="score" class="danger"></span></p>
-            <a href="#" id="googleSearchBtn" class="btn btn-search" target="_blank">🔍 구글에서 무첨가 대체품/최저가 찾기</a>
+            <a href="#" id="googleSearchBtn" class="btn" target="_blank" style="display:none;">🔍 구글에서 대체품 찾기</a>
         </div>
     </div>
 
     <script>
-        const cameraInput = document.getElementById('cameraInput');
-        const preview = document.getElementById('preview');
         const resultBox = document.getElementById('resultBox');
-        const statusText = document.getElementById('status');
-        const scannedText = document.getElementById('scannedText');
-        const scoreText = document.getElementById('score');
+        const productNameEl = document.getElementById('productName');
+        const badListEl = document.getElementById('badList');
+        const scoreEl = document.getElementById('score');
         const googleSearchBtn = document.getElementById('googleSearchBtn');
 
+        // 유해 성분 사전 (점수 감점 로직)
         const badIngredientsDB = {
-            "액상과당": 20,
-            "합성향료": 10,
-            "아스파탐": 15,
-            "아질산나트륨": 30,
-            "소브산": 15,
-            "설탕": 10
+            "sugar": 10, "fructose": 20, "syrup": 15, "artificial": 15, "color": 10
         };
 
-        cameraInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            preview.src = URL.createObjectURL(file);
-            preview.style.display = 'block';
+        function onScanSuccess(decodedText, decodedResult) {
+            // 스캔 성공 시 스캐너 일시 정지 후 결과창 표시
+            html5QrcodeScanner.pause();
             resultBox.style.display = 'block';
-            statusText.innerText = "이미지에서 글자를 읽는 중... (약 3~5초 소요)";
-            googleSearchBtn.style.display = 'none';
-            scannedText.innerText = "";
-            scoreText.innerText = "";
+            productNameEl.innerText = "바코드(" + decodedText + ") 데이터 조회 중...";
+            
+            // Open Food Facts API 호출 (인증키 없이 무료 호출 가능)
+            fetch(`https://world.openfoodfacts.org/api/v0/product/${decodedText}.json`)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.status === 1 && data.product) {
+                        const product = data.product;
+                        productNameEl.innerText = product.product_name || "이름 정보 없음";
+                        
+                        let ingredientsText = (product.ingredients_text || "").toLowerCase();
+                        let score = 100;
+                        let foundBad = [];
 
-            try {
-                const { data: { text } } = await Tesseract.recognize(file, 'kor');
-                
-                let score = 100;
-                let foundBad = [];
+                        // 성분 분석
+                        for (let key in badIngredientsDB) {
+                            if (ingredientsText.includes(key)) {
+                                score -= badIngredientsDB[key];
+                                foundBad.push(key);
+                            }
+                        }
 
-                for (let key in badIngredientsDB) {
-                    if (text.includes(key)) {
-                        score -= badIngredientsDB[key];
-                        foundBad.push(key);
+                        if (foundBad.length > 0) {
+                            badListEl.innerText = foundBad.join(", ");
+                            googleSearchBtn.href = "https://www.google.com/search?q=" + encodeURIComponent(product.product_name + " 대체품");
+                            googleSearchBtn.style.display = 'block';
+                        } else {
+                            badListEl.innerText = "등록된 위험 성분 없음 (또는 영문 성분 데이터 없음)";
+                        }
+                        
+                        scoreEl.innerText = score + " / 100 점";
+                    } else {
+                        productNameEl.innerText = "글로벌 DB에 등록되지 않은 상품입니다.";
+                        badListEl.innerText = "-";
+                        scoreEl.innerText = "-";
                     }
-                }
+                    
+                    // 3초 후 스캐너 재개
+                    setTimeout(() => { html5QrcodeScanner.resume(); }, 3000);
+                })
+                .catch(err => {
+                    productNameEl.innerText = "데이터 조회 실패";
+                    setTimeout(() => { html5QrcodeScanner.resume(); }, 3000);
+                });
+        }
 
-                statusText.innerText = "성분 분석 완료";
-                
-                if (foundBad.length > 0) {
-                    scannedText.innerText = foundBad.join(", ");
-                } else {
-                    scannedText.innerText = "위험 성분 미발견 (또는 글자 인식 실패)";
-                }
-                
-                scoreText.innerText = score + " / 100 점";
-
-                let searchQuery = "건강한 무첨가 식품 최저가";
-                if (foundBad.length > 0) {
-                    searchQuery = foundBad.join(" ") + " 없는 무첨가 식품 대체품 최저가";
-                }
-                
-                googleSearchBtn.href = "https://www.google.com/search?q=" + encodeURIComponent(searchQuery);
-                googleSearchBtn.style.display = 'block';
-
-            } catch (err) {
-                statusText.innerText = "판독 오류 발생 (다시 촬영해 주십시오)";
-            }
-        });
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: 250 });
+        html5QrcodeScanner.render(onScanSuccess);
     </script>
 </body>
 </html>
