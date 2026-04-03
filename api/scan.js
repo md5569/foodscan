@@ -1,44 +1,34 @@
-// api/scan.js
-module.exports = async (req, res) {
-  // 1. 프론트엔드에서 보낸 바코드 번호 수신
+export default async function handler(req, res) {
   const { barcode } = req.query;
-
-  if (!barcode) {
-    return res.status(400).json({ success: false, message: "바코드 번호가 누락된 상태입니다." });
-  }
+  if (!barcode) return res.status(400).json({ success: false, message: "바코드 없음" });
 
   try {
-    // 2. 백엔드 서버에서 외부 API 호출 (브라우저 CORS 차단 완벽 우회)
+    // 전 세계 오픈 식품 DB 연동 (Open Food Facts API)
     const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
     const data = await response.json();
 
-    if (data.status === 1 && data.product) {
-      const productName = data.product.product_name || "이름 정보 없음";
-      const ingredientsText = (data.product.ingredients_text || "").toLowerCase();
+    if (data.status === 1) {
+      const p = data.product;
+      // 성분 분석 로직: 첨가물(additives) 개수에 따라 100점에서 감점
+      const additives = p.additives_tags || [];
+      const score = Math.max(10, 100 - (additives.length * 7)); 
       
-      // 3. 10번의 수치 교차 검증이 완료된 유해 성분 감점 로직 처리
-      const badIngredientsDB = { "sugar": 10, "fructose": 20, "syrup": 15, "artificial": 15, "color": 10 };
-      let score = 100;
-      let foundBad = [];
+      // 알레르기 유발 물질 추출
+      const allergens = p.allergens_from_ingredients || "정보 없음";
 
-      for (let key in badIngredientsDB) {
-        if (ingredientsText.includes(key)) {
-          score -= badIngredientsDB[key];
-          foundBad.push(key);
-        }
-      }
-
-      // 4. 가공된 안전한 데이터만 프론트엔드로 전달
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
-        productName: productName,
+        productName: p.product_name_ko || p.product_name || "알 수 없는 상품",
+        badIngredients: additives.map(a => a.split(':')[1].replace(/-/g, ' ')),
+        allergens: allergens,
         score: score,
-        badIngredients: foundBad
+        image: p.image_front_small_url || ""
       });
     } else {
-      return res.status(404).json({ success: false, message: "DB에 등록되지 않은 상품입니다." });
+      // DB에 없는 경우
+      res.status(200).json({ success: false });
     }
   } catch (error) {
-    return res.status(500).json({ success: false, message: "서버 내부 통신 오류가 발생한 상황입니다." });
+    res.status(500).json({ success: false, message: "서버 통신 오류" });
   }
 }
