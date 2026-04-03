@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>스마트 성분 스캐너</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; word-break: keep-all; overflow-wrap: break-word; margin: 0; }
+        .container { max-width: 100%; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); box-sizing: border-box; }
+        h2 { margin-top: 0; }
+        img { max-width: 100%; height: auto; display: block; margin-top: 15px; border-radius: 8px; }
+        input[type="file"] { display: none; }
+        .btn { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; text-align: center; color: #fff; background: #007bff; border: none; border-radius: 8px; margin-top: 10px; cursor: pointer; text-decoration: none; box-sizing: border-box; word-break: keep-all; }
+        .btn-search { background: #ea4335; display: none; margin-top: 20px; }
+        .result-box { margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; display: none; box-sizing: border-box; }
+        .danger { color: #d9534f; font-weight: bold; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>스마트 성분 스캐너</h2>
+        <p>스마트폰 카메라로 상품의 성분표를 촬영해 주시기 바랍니다.</p>
+
+        <label for="cameraInput" class="btn">📷 카메라로 성분표 찍기</label>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment">
+
+        <img id="preview" style="display:none;" alt="촬영된 이미지">
+
+        <div id="resultBox" class="result-box">
+            <h3 id="status">분석 대기 중...</h3>
+            <p><strong>발견된 성분:</strong> <br><span id="scannedText"></span></p>
+            <p><strong>안전 점수:</strong> <span id="score" class="danger"></span></p>
+            <a href="#" id="googleSearchBtn" class="btn btn-search" target="_blank">🔍 구글에서 무첨가 대체품/최저가 찾기</a>
+        </div>
+    </div>
+
+    <script>
+        const cameraInput = document.getElementById('cameraInput');
+        const preview = document.getElementById('preview');
+        const resultBox = document.getElementById('resultBox');
+        const statusText = document.getElementById('status');
+        const scannedText = document.getElementById('scannedText');
+        const scoreText = document.getElementById('score');
+        const googleSearchBtn = document.getElementById('googleSearchBtn');
+
+        const badIngredientsDB = {
+            "액상과당": 20,
+            "합성향료": 10,
+            "아스파탐": 15,
+            "아질산나트륨": 30,
+            "소브산": 15,
+            "설탕": 10
+        };
+
+        cameraInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
+            resultBox.style.display = 'block';
+            statusText.innerText = "이미지에서 글자를 읽는 중... (약 3~5초 소요)";
+            googleSearchBtn.style.display = 'none';
+            scannedText.innerText = "";
+            scoreText.innerText = "";
+
+            try {
+                const { data: { text } } = await Tesseract.recognize(file, 'kor');
+                
+                let score = 100;
+                let foundBad = [];
+
+                for (let key in badIngredientsDB) {
+                    if (text.includes(key)) {
+                        score -= badIngredientsDB[key];
+                        foundBad.push(key);
+                    }
+                }
+
+                statusText.innerText = "성분 분석 완료";
+                
+                if (foundBad.length > 0) {
+                    scannedText.innerText = foundBad.join(", ");
+                } else {
+                    scannedText.innerText = "위험 성분 미발견 (또는 글자 인식 실패)";
+                }
+                
+                scoreText.innerText = score + " / 100 점";
+
+                let searchQuery = "건강한 무첨가 식품 최저가";
+                if (foundBad.length > 0) {
+                    searchQuery = foundBad.join(" ") + " 없는 무첨가 식품 대체품 최저가";
+                }
+                
+                googleSearchBtn.href = "https://www.google.com/search?q=" + encodeURIComponent(searchQuery);
+                googleSearchBtn.style.display = 'block';
+
+            } catch (err) {
+                statusText.innerText = "판독 오류 발생 (다시 촬영해 주십시오)";
+            }
+        });
+    </script>
+</body>
+</html>
