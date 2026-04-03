@@ -1,44 +1,69 @@
-<script>
-    function onScanSuccess(decodedText, decodedResult) {
-        if (!isScanning) return;
-        isScanning = false;
-        
-        html5QrCode.pause();
-        resultBox.style.display = 'block';
-        productNameEl.innerText = "바코드(" + decodedText + ") 자체 서버 조회 중...";
-        
-        // 외부 API가 아닌 우리가 Vercel에 만든 자체 백엔드(/api/scan)로 요청 전송
-        fetch(`/api/scan?barcode=${decodedText}`)
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) {
-                    productNameEl.innerText = data.productName;
-                    
-                    if (data.badIngredients.length > 0) {
-                        badListEl.innerText = data.badIngredients.join(", ");
-                        googleSearchBtn.href = "https://www.google.com/search?q=" + encodeURIComponent(data.productName + " 대체품");
-                        googleSearchBtn.style.display = 'block';
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>식품 안전 스캐너</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { background: #fff; width: 100%; max-width: 450px; padding: 20px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #1a365d; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; }
+        .result-box { margin-top: 20px; padding: 15px; border-radius: 10px; background: #f8fafc; border-left: 4px solid #1a365d; display: none; }
+        .btn { display: block; width: 100%; padding: 12px; background: #1a365d; color: #fff; text-align: center; border-radius: 8px; text-decoration: none; margin-top: 15px; font-weight: bold; }
+    </style>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>🔍 상품 스캐너</h2>
+        <div id="reader"></div>
+        <div id="resultBox" class="result-box">
+            <p><strong>상품명:</strong> <span id="pName">조회 중...</span></p>
+            <p><strong>위험성분:</strong> <span id="pBad">-</span></p>
+            <p><strong>안전점수:</strong> <span id="pScore" style="color:red; font-weight:bold;">-</span></p>
+            <a href="#" id="searchBtn" class="btn" target="_blank" style="display:none;">대체 상품 검색</a>
+        </div>
+    </div>
+
+    <script>
+        const html5QrCode = new Html5Qrcode("reader");
+        let isScanning = true;
+
+        // 후면 카메라 강제 활성화 설정 (facingMode: environment)
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+        function onScanSuccess(decodedText) {
+            if (!isScanning) return;
+            isScanning = false;
+            html5QrCode.pause();
+            
+            document.getElementById('resultBox').style.display = 'block';
+            
+            // Vercel 백엔드 API 호출 (/api/scan)
+            fetch(`/api/scan?barcode=${decodedText}`)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success) {
+                        document.getElementById('pName').innerText = data.productName;
+                        document.getElementById('pBad').innerText = data.badIngredients.length > 0 ? data.badIngredients.join(", ") : "없음";
+                        document.getElementById('pScore').innerText = data.score + " / 100";
+                        const sBtn = document.getElementById('searchBtn');
+                        sBtn.href = `https://www.google.com/search?q=${encodeURIComponent(data.productName + " 대체품")}`;
+                        sBtn.style.display = 'block';
                     } else {
-                        badListEl.innerText = "위험 성분 없음";
+                        document.getElementById('pName').innerText = "데이터 없음";
                     }
-                    scoreEl.innerText = data.score + " / 100 점";
-                } else {
-                    productNameEl.innerText = data.message;
-                    badListEl.innerText = "-";
-                    scoreEl.innerText = "-";
-                }
-                
-                setTimeout(() => { 
-                    isScanning = true; 
-                    html5QrCode.resume(); 
-                }, 3000);
-            })
-            .catch(err => {
-                productNameEl.innerText = "백엔드 서버 접속 실패입니다.";
-                setTimeout(() => { 
-                    isScanning = true; 
-                    html5QrCode.resume(); 
-                }, 3000);
-            });
-    }
-</script>
+                    setTimeout(() => { isScanning = true; html5QrCode.resume(); }, 3000);
+                })
+                .catch(() => {
+                    alert("서버 연결 실패. api/scan.js 파일 위치를 확인하세요.");
+                    isScanning = true; html5QrCode.resume();
+                });
+        }
+
+        html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+            .catch(err => alert("카메라를 찾을 수 없거나 권한이 거부되었습니다."));
+    </script>
+</body>
+</html>
