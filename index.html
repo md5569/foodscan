@@ -41,7 +41,6 @@
             max-width: 460px;
         }
 
-        /* Mobile specific fixes */
         .app-header {
             text-align: center;
             margin-bottom: 25px;
@@ -127,7 +126,7 @@
             font-weight: 800;
             font-size: 16px;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s;
             white-space: nowrap;
         }
 
@@ -140,10 +139,6 @@
             box-shadow: 0 6px 14px rgba(255, 59, 48, 0.25);
         }
 
-        .btn-search:hover {
-            background: #E0352A;
-        }
-
         .btn-camera {
             background: #F2F2F7;
             color: #000;
@@ -151,11 +146,6 @@
             width: 100%;
             margin-bottom: 20px;
             font-size: 15px;
-        }
-
-        .btn-camera.active {
-            background: #E5E5EA;
-            color: var(--danger);
         }
 
         #reader {
@@ -196,7 +186,7 @@
             max-height: 250px;
             object-fit: contain;
             border-radius: 20px;
-            margin-bottom: 25px;
+            margin-bottom: 15px;
             padding: 10px;
             box-sizing: border-box;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
@@ -234,7 +224,6 @@
             line-height: 1.3;
         }
 
-        /* For Dual Calories \n rendering */
         .metric-value.good {
             color: var(--success);
         }
@@ -328,9 +317,20 @@
             align-items: flex-start;
         }
 
-        .store-btn:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+        .s-naver .store-name {
+            color: #03C75A;
+        }
+
+        .s-coupang .store-name {
+            color: #CB1400;
+        }
+
+        .s-amazon .store-name {
+            color: #FF9900;
+        }
+
+        .s-google .store-name {
+            color: #4285F4;
         }
 
         .store-name {
@@ -349,22 +349,6 @@
             font-weight: 800;
             color: var(--text-dark);
             white-space: nowrap;
-        }
-
-        .s-naver .store-name {
-            color: #03C75A;
-        }
-
-        .s-coupang .store-name {
-            color: #CB1400;
-        }
-
-        .s-amazon .store-name {
-            color: #FF9900;
-        }
-
-        .s-google .store-name {
-            color: #4285F4;
         }
 
         .loading {
@@ -405,16 +389,13 @@
 
 <body>
     <div class="container">
-
         <div class="app-header">
-            <!-- 모바일에 완전히 안전한 기본 이모지 사용 -->
             <div class="app-emoji">👨‍🍳</div>
             <h2>뚱땡이 아빠의 AI 식품 스캐너</h2>
-            <div class="subtitle">우리 가족을 위한 깐깐한 건강 지킴이</div>
+            <div class="subtitle">우리 가족을 위한 깐깐한 의학/영양 지킴이</div>
         </div>
 
         <div class="card">
-
             <div class="controls">
                 <div class="input-group">
                     <input type="tel" id="barcode" placeholder="바코드 입력" />
@@ -424,22 +405,62 @@
                 <div id="reader"></div>
             </div>
 
-            <div class="loading" id="loading">영양 성분과 쇼핑몰 최저가를 꼼꼼히 긁어오는 중... 🔬</div>
+            <div class="loading" id="loading">의학/영양학 데이터를 꼼꼼히 분석 중입니다... 🔬</div>
 
             <div class="result-box" id="resultBox">
                 <div class="brand-text" id="brandText"></div>
                 <h3 class="product-title" id="productName"></h3>
                 <img id="productImg" class="product-img" src="" alt="제품 사진" style="display: none;" />
 
+                <!-- Nutri-Score (유럽 인증마크) -->
+                <div id="nutriScoreContainer" style="display:none; text-align:center; margin-bottom: 25px;">
+                    <div id="nutriScoreBadge"
+                        style="display:inline-block; padding: 4px 18px 6px 18px; border-radius: 20px; font-weight:900; color:#FFF; font-size:1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                        Nutri-Score 공식 등급: <span id="nutriScoreLetter"
+                            style="font-size:1.6rem; vertical-align:middle; margin-left:4px;"></span>
+                    </div>
+                </div>
+
+                <!-- 특정 타겟 주의 질환 경고 모델 -->
+                <div id="targetWarningsContainer" style="display:none; margin-bottom: 25px;">
+                </div>
+
                 <div class="metrics-grid">
                     <div class="metric-card" style="padding: 16px 8px;">
-                        <div class="metric-title">🛡️ 안전 점수</div>
+                        <div class="metric-title">🛡️ 자체 안전 점수</div>
                         <div class="metric-value" id="score"></div>
                     </div>
-                    <!-- 칼로리는 내용이 많으므로 pre-wrap 적용됨 -->
                     <div class="metric-card" style="padding: 16px 8px;">
                         <div class="metric-title">🔥 칼로리 (열량)</div>
                         <div class="metric-value" id="calories" style="font-size:0.95rem;"></div>
+                    </div>
+                </div>
+
+                <!-- 영국식 신호등 (Traffic Light) 영양 표시 -->
+                <div class="health-section">
+                    <h4 class="health-title">🚦 영국식 핵심 3대 영양소 신호등 (100g)</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+                        <div style="text-align:center; padding:12px; background:#FAFAFA; border-radius:16px;">
+                            <div style="font-size:0.8rem; color:#8E8E93; font-weight:800;">당류(Sugar)</div>
+                            <div id="sugarEmoji" style="font-size:1.6rem; margin:4px 0;"></div>
+                            <div id="sugarVal" style="font-weight:900; color:#1C1C1E; font-family:'Jua', sans-serif;">
+                            </div>
+                            <div id="sugarTxt" style="font-size:0.75rem; font-weight:800; margin-top:2px;"></div>
+                        </div>
+                        <div style="text-align:center; padding:12px; background:#FAFAFA; border-radius:16px;">
+                            <div style="font-size:0.8rem; color:#8E8E93; font-weight:800;">지방(Fat)</div>
+                            <div id="fatEmoji" style="font-size:1.6rem; margin:4px 0;"></div>
+                            <div id="fatVal" style="font-weight:900; color:#1C1C1E; font-family:'Jua', sans-serif;">
+                            </div>
+                            <div id="fatTxt" style="font-size:0.75rem; font-weight:800; margin-top:2px;"></div>
+                        </div>
+                        <div style="text-align:center; padding:12px; background:#FAFAFA; border-radius:16px;">
+                            <div style="font-size:0.8rem; color:#8E8E93; font-weight:800;">나트륨(Na)</div>
+                            <div id="sodiumEmoji" style="font-size:1.6rem; margin:4px 0;"></div>
+                            <div id="sodiumVal" style="font-weight:900; color:#1C1C1E; font-family:'Jua', sans-serif;">
+                            </div>
+                            <div id="sodiumTxt" style="font-size:0.75rem; font-weight:800; margin-top:2px;"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -451,17 +472,33 @@
                 </div>
 
                 <div class="health-section">
-                    <h4 class="health-title" style="color: var(--danger);">⚠️ 주의해야 할 핵심 유해 성분</h4>
+                    <h4 class="health-title" style="color: var(--danger);">⚠️ 주의해야 할 핵심 유해 화학성분</h4>
                     <ul class="ul-list" id="badIngredients"></ul>
                 </div>
 
                 <div class="health-section">
-                    <h4 class="health-title" style="color: var(--warning);">🤧 알레르기 유발 물질</h4>
+                    <h4 class="health-title" style="color: var(--warning);">🤧 알레르기 유발 의심 물질</h4>
                     <ul class="ul-list" id="allergens"></ul>
                 </div>
 
+                <div class="health-section" id="advisorSection"
+                    style="display:none; background:#F0F8FF; border-color:#BBE1FA;">
+                    <h4 class="health-title" style="color: #007AFF;">💡 아빠의 건강 코멘트 (섭취 가이드)</h4>
+                    <ul class="ul-list">
+                        <li id="guideText" style="background:transparent; border:none; padding:5px 0;"></li>
+                        <li id="alternativeBox"
+                            style="background:#FFF; border-left:4px solid #007AFF; margin-top:10px; display:none;">
+                            <strong style="color:var(--text-dark);">대체품 추천:</strong> <span id="alternativeText"
+                                style="color:var(--text-dark);"></span><br>
+                            <a id="alternativeLink" href="#" target="_blank"
+                                style="display:inline-block; margin-top:8px; color:#007AFF; font-weight:800; text-decoration:none;">🛒
+                                건강한 대체품 탐색하기 ➔</a>
+                        </li>
+                    </ul>
+                </div>
+
                 <div class="store-dashboard">
-                    <div class="store-header">💰 글로벌 4대 쇼핑몰 빠른 검색</div>
+                    <div class="store-header">💰 글로벌 4대 쇼핑몰 비교 (풀네임 검색)</div>
                     <div class="store-grid" id="storeGrid"></div>
                 </div>
             </div>
@@ -480,94 +517,101 @@
         let html5QrCode = null;
         let isCameraActive = false;
 
-        cameraBtn.addEventListener('click', async () => {
-            if (isCameraActive) await stopCamera();
-            else startCamera();
-        });
-
+        cameraBtn.addEventListener('click', async () => { if (isCameraActive) await stopCamera(); else startCamera(); });
         function startCamera() {
             if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-            readerEl.style.display = 'block';
-            cameraBtn.innerHTML = '⏹ 카메라 끄기';
-            cameraBtn.classList.add('active');
-            isCameraActive = true;
-            resultBox.style.display = 'none';
-
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 15, qrbox: { width: 250, height: 150 } },
-                (decodedText) => {
-                    barcodeInput.value = decodedText;
-                    stopCamera();
-                    handleSearch(decodedText);
-                }, () => { }
-            ).catch(err => {
-                alert('카메라 권한을 허용해주세요.'); stopCamera();
-            });
+            readerEl.style.display = 'block'; cameraBtn.innerHTML = '⏹ 카메라 끄기'; cameraBtn.classList.add('active'); isCameraActive = true; resultBox.style.display = 'none';
+            html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 250, height: 150 } }, (decodedText) => { barcodeInput.value = decodedText; stopCamera(); handleSearch(decodedText); }, () => { }).catch(err => { alert('카메라 권한을 허용해주세요.'); stopCamera(); });
         }
-
-        async function stopCamera() {
-            if (html5QrCode && isCameraActive) { try { await html5QrCode.stop(); } catch (e) { } html5QrCode.clear(); }
-            readerEl.style.display = 'none'; cameraBtn.innerHTML = '📸 폰 카메라로 바코드 스캔하기'; cameraBtn.classList.remove('active'); isCameraActive = false;
-        }
+        async function stopCamera() { if (html5QrCode && isCameraActive) { try { await html5QrCode.stop(); } catch (e) { } html5QrCode.clear(); } readerEl.style.display = 'none'; cameraBtn.innerHTML = '📸 폰 카메라로 바코드 스캔하기'; cameraBtn.classList.remove('active'); isCameraActive = false; }
 
         async function handleSearch(manualBarcode = null) {
             const barcode = manualBarcode || barcodeInput.value.trim();
             if (!barcode) { alert('바코드를 먼저 입력해주세요!'); return; }
             if (isCameraActive) await stopCamera();
-
-            resultBox.style.display = 'none';
-            loadingEl.style.display = 'block';
+            resultBox.style.display = 'none'; loadingEl.style.display = 'block';
 
             try {
                 const res1 = await fetch(`/api/scan?barcode=${barcode}`);
                 const productData = await res1.json();
-                if (!productData || !productData.success) {
-                    loadingEl.style.display = 'none'; alert('DB에 아직 등록되지 않은 상품입니다 🥲 다른 과자를 찍어주세요!'); return;
-                }
-
-                // Amazon/Naver 검색 시 잘리지 않은 "FULL NAME"을 전달합니다. (예: JUST 스위트콘)
+                if (!productData || !productData.success) { loadingEl.style.display = 'none'; alert('DB에 아직 등록되지 않은 희귀 상품입니다 🥲'); return; }
                 const searchKeyword = encodeURIComponent(productData.fullName || productData.productName);
                 const res2 = await fetch(`/api/price?barcode=${barcode}&productName=${searchKeyword}`);
                 const priceData = await res2.json();
 
                 loadingEl.style.display = 'none';
                 renderResult(productData, priceData);
-            } catch (e) {
-                loadingEl.style.display = 'none'; alert('서버 통신 오류가 발생했습니다.');
-            }
+            } catch (e) { loadingEl.style.display = 'none'; alert('서버 통신 오류가 발생했습니다.'); }
         }
 
         function populateList(elementId, items, className) {
-            const el = document.getElementById(elementId);
-            el.innerHTML = '';
+            const el = document.getElementById(elementId); el.innerHTML = '';
             const list = Array.isArray(items) ? items : [items];
-            list.forEach(i => {
-                const li = document.createElement('li');
-                li.className = className;
-                li.textContent = i;
-                el.appendChild(li);
-            });
+            list.forEach(i => { const li = document.createElement('li'); li.className = className; li.textContent = i; el.appendChild(li); });
         }
 
         function renderResult(data, priceData) {
-            document.getElementById('brandText').textContent = data.brand || '브랜드 정보 없음';
+            document.getElementById('brandText').textContent = data.brand || '브랜드 미등록';
             document.getElementById('productName').textContent = data.productName;
-
             const img = document.getElementById('productImg');
             if (data.image) { img.src = data.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
 
-            const sc = document.getElementById('score');
-            sc.textContent = `${data.score}점`;
-            sc.className = 'metric-value ' + (data.score >= 80 ? 'good' : (data.score >= 50 ? '' : 'bad'));
+            // Nutri-Score
+            const scoreCont = document.getElementById('nutriScoreContainer');
+            const scoreBadge = document.getElementById('nutriScoreBadge');
+            const scoreLetter = document.getElementById('nutriScoreLetter');
+            if (data.nutriGrade) {
+                scoreCont.style.display = 'block';
+                scoreLetter.textContent = data.nutriGrade;
+                const colors = { 'A': '#008b4c', 'B': '#80c142', 'C': '#feca0b', 'D': '#f58220', 'E': '#ef3e22' };
+                scoreBadge.style.background = colors[data.nutriGrade] || '#8E8E93';
+            } else { scoreCont.style.display = 'none'; }
 
+            // Target Warnings
+            const twCont = document.getElementById('targetWarningsContainer');
+            twCont.innerHTML = '';
+            if (data.targetWarnings && data.targetWarnings.length > 0) {
+                twCont.style.display = 'block';
+                data.targetWarnings.forEach(tw => {
+                    const d = document.createElement('div');
+                    d.style.cssText = "background: rgba(255, 59, 48, 0.08); border-left: 4.5px solid #FF3B30; padding: 14px; border-radius: 12px; font-weight:800; font-size:0.95rem; color:#1C1C1E; margin-bottom: 8px; line-height: 1.4;";
+                    d.textContent = tw;
+                    twCont.appendChild(d);
+                });
+            } else { twCont.style.display = 'none'; }
+
+            // Score & Calories
+            const sc = document.getElementById('score');
+            sc.textContent = `${data.score}점`; sc.className = 'metric-value ' + (data.score >= 80 ? 'good' : (data.score >= 50 ? '' : 'bad'));
             document.getElementById('calories').textContent = data.calories || '비공개';
+
+            // UK Traffic Light Macros
+            if (data.macros) {
+                const mapMacro = (key) => {
+                    document.getElementById(key + 'Emoji').textContent = data.macros[key].emoji;
+                    document.getElementById(key + 'Val').textContent = data.macros[key].value;
+                    document.getElementById(key + 'Txt').textContent = data.macros[key].text;
+                    document.getElementById(key + 'Txt').style.color = data.macros[key].level === 'red' ? '#FF3B30' : (data.macros[key].level === 'amber' ? '#FF9500' : '#34C759');
+                };
+                mapMacro('sugar'); mapMacro('fat'); mapMacro('sodium');
+            }
 
             document.getElementById('nova').textContent = data.nova || '미분류';
             if (data.nova && data.nova.includes('초가공')) { document.getElementById('nova').className = 'li-bad'; } else { document.getElementById('nova').className = 'li-allergy'; }
 
             populateList('badIngredients', data.badIngredients, String(data.badIngredients).includes('깨끗한') ? 'li-good' : 'li-bad');
             populateList('allergens', data.allergens, 'li-allergy');
+
+            const advisorSec = document.getElementById('advisorSection');
+            if (data.guide || data.alternative) {
+                advisorSec.style.display = 'block';
+                document.getElementById('guideText').textContent = data.guide || '';
+                if (data.alternative) {
+                    document.getElementById('alternativeBox').style.display = 'block';
+                    document.getElementById('alternativeText').textContent = data.alternative.text;
+                    document.getElementById('alternativeLink').href = `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(data.alternative.keyword)}`;
+                } else { document.getElementById('alternativeBox').style.display = 'none'; }
+            } else { advisorSec.style.display = 'none'; }
 
             storeGrid.innerHTML = '';
             if (priceData && priceData.stores) {
@@ -578,10 +622,8 @@
                     btn.appendChild(n); btn.appendChild(p); storeGrid.appendChild(btn);
                 });
             }
-
             resultBox.style.display = 'block';
         }
-
         searchBtn.addEventListener('click', () => handleSearch());
         barcodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
     </script>
