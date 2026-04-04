@@ -5,35 +5,52 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>AI 식품 안전 스캐너 Pro</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- QR Code / Barcode Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
     <style>
         :root {
-            --primary: #1a365d;
-            --success: #48bb78;
-            --warning: #ed8936;
-            --danger: #f56565;
-            --bg: #f7fafc;
-            --card-bg: #ffffff;
-            --text: #2d3748;
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --bg-gradient: linear-gradient(135deg, #f6f8fd 0%, #e9edf8 100%);
+            --card-bg: rgba(255, 255, 255, 0.75);
+            --text-dark: #1F2937;
+            --text-muted: #6B7280;
         }
 
         body {
-            font-family: -apple-system, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
-            background: var(--bg);
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-gradient);
+            background-attachment: fixed;
             margin: 0;
-            padding: 15px;
-            color: var(--text);
+            padding: 20px 15px;
+            color: var(--text-dark);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
 
         .container {
+            width: 100%;
             max-width: 480px;
-            margin: 0 auto;
         }
 
         .card {
             background: var(--card-bg);
-            border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 24px;
+            padding: 25px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
             margin-bottom: 20px;
         }
 
@@ -41,79 +58,231 @@
             text-align: center;
             margin-top: 0;
             color: var(--primary);
-            font-size: 1.5rem;
+            font-size: 1.6rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 20px;
         }
 
-        #reader {
-            width: 100%;
-            border-radius: 15px;
-            overflow: hidden;
-            background: #000;
-            border: 4px solid var(--primary);
-            margin-bottom: 10px;
-        }
-
-        .scan-tip {
-            text-align: center;
-            font-size: 0.8rem;
-            color: #718096;
-            margin-bottom: 15px;
+        /* 컨트롤 영역 */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
         }
 
         .input-group {
             display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
+            gap: 10px;
         }
 
         input {
             flex: 1;
-            padding: 14px;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
+            padding: 14px 16px;
+            border: 2px solid #E5E7EB;
+            border-radius: 14px;
             font-size: 16px;
+            font-family: 'Inter', sans-serif;
             outline: none;
-            transition: 0.2s;
+            background: rgba(255, 255, 255, 0.9);
+            transition: all 0.2s ease;
         }
 
         input:focus {
             border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
         }
 
-        .btn-search {
-            padding: 0 20px;
+        button {
+            padding: 14px 20px;
             background: var(--primary);
             color: #fff;
             border: none;
-            border-radius: 12px;
-            font-weight: bold;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
             cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-camera {
+            background: var(--text-dark);
+            width: 100%;
+        }
+
+        .btn-camera:hover {
+            background: #000;
+        }
+
+        .btn-camera.active {
+            background: var(--danger);
+        }
+
+        /* 스캐너 영역 */
+        #reader {
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            display: none;
+            border: 3px solid var(--primary);
+            background: #000;
+        }
+
+        /* 결과 영역 */
         .result-box {
             display: none;
-            padding: 20px;
-            border-radius: 15px;
+            padding: 24px;
+            border-radius: 20px;
             color: #fff;
-            margin-top: 10px;
-            animation: slideUp 0.3s ease;
+            margin-top: 15px;
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
         }
 
-        .good {
-            background: var(--success);
+        .score-good {
+            background: linear-gradient(135deg, var(--success), #059669);
         }
 
-        .soso {
-            background: var(--warning);
+        .score-soso {
+            background: linear-gradient(135deg, var(--warning), #D97706);
         }
 
-        .bad {
-            background: var(--danger);
+        .score-bad {
+            background: linear-gradient(135deg, var(--danger), #DC2626);
+        }
+
+        .brand-text {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .product-title {
+            margin: 0;
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1.3;
+            margin-bottom: 15px;
+        }
+
+        .product-img {
+            width: 100%;
+            height: auto;
+            max-height: 250px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 배지 시스템 */
+        .info-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 12px 16px;
+            border-radius: 12px;
+        }
+
+        .info-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            opacity: 0.9;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 800;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--text-dark);
+            text-shadow: none;
+        }
+
+        .badge-danger {
+            color: var(--danger);
+        }
+
+        .badge-warning {
+            color: #B45309;
+        }
+
+        .badge-score {
+            font-size: 1.1rem;
+        }
+
+        /* 가격 영역 */
+        .price-section {
+            background: rgba(255, 255, 255, 0.95);
+            color: var(--text-dark);
+            padding: 16px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+
+        .price-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .price-amount {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin: 0;
+        }
+
+        .merchant-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-top: 4px;
+        }
+
+        /* 로딩 텍스트 */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-weight: 600;
+            color: var(--primary);
+            display: none;
         }
 
         @keyframes slideUp {
             from {
-                transform: translateY(20px);
+                transform: translateY(30px);
                 opacity: 0;
             }
 
@@ -122,51 +291,6 @@
                 opacity: 1;
             }
         }
-
-        .btn-web {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.25);
-            color: #fff;
-            text-align: center;
-            border-radius: 10px;
-            text-decoration: none;
-            margin-top: 15px;
-            font-weight: bold;
-            border: 1px solid rgba(255, 255, 255, 0.5);
-        }
-
-        .price-box {
-            margin-top: 10px;
-            font-size: 1rem;
-            text-align: center;
-            color: var(--primary);
-        }
-
-        .recommendations {
-            margin-top: 15px;
-        }
-
-        .recommendations h3 {
-            margin: 0 0 5px 0;
-            font-size: 1rem;
-            color: var(--primary);
-        }
-
-        .recommendations ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .recommendations li {
-            background: var(--card-bg);
-            border-radius: 8px;
-            padding: 8px;
-            margin-bottom: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-        }
     </style>
 </head>
 
@@ -174,113 +298,224 @@
     <div class="container">
         <div class="card">
             <h2>AI 식품 안전 스캐너 Pro</h2>
-            <div class="input-group">
-                <input type="text" id="barcode" placeholder="바코드 입력" />
-                <button class="btn-search" id="searchBtn">검색</button>
+
+            <div class="controls">
+                <button type="button" class="btn-camera" id="cameraBtn">
+                    📷 카메라로 스캔
+                </button>
+                <div id="reader"></div>
+
+                <div class="input-group">
+                    <input type="text" id="barcode" placeholder="바코드 번호 직접 입력" />
+                    <button class="btn-search" id="searchBtn">검색</button>
+                </div>
             </div>
+
+            <div class="loading" id="loading">데이터를 분석 중입니다... 🔍</div>
+
             <div class="result-box" id="resultBox">
-                <h3 id="productName"></h3>
-                <img id="productImg" src="" alt="제품 이미지" style="max-width:100%;border-radius:8px;margin:10px 0;" />
-                <p>점수: <span id="score"></span></p>
-                <p>알레르기 유발 성분: <span id="allergens"></span></p>
-                <p>주의 성분: <span id="badIngredients"></span></p>
-                <div class="price-box" id="priceBox"></div>
-                <div class="recommendations" id="recommendBox" style="display:none;">
-                    <h3>대체 제품 추천</h3>
-                    <ul id="recommendList"></ul>
+                <div class="brand-text" id="brandText"></div>
+                <h3 class="product-title" id="productName"></h3>
+                <img id="productImg" class="product-img" src="" alt="제품 이미지" style="display: none;" />
+
+                <div class="info-grid">
+                    <div class="info-row">
+                        <span class="info-label">안전 점수</span>
+                        <span class="badge badge-score" id="score"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">건강 등급 (Nutri-Score)</span>
+                        <span class="badge" id="nutriScore"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">주의 성분</span>
+                        <span class="badge badge-danger" id="badIngredients"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">알레르기</span>
+                        <span class="badge badge-warning" id="allergens"></span>
+                    </div>
+                </div>
+
+                <div class="price-section" id="priceBox" style="display: none;">
+                    <div class="price-label">최저가 정보</div>
+                    <h4 class="price-amount" id="priceAmount"></h4>
+                    <div class="merchant-name" id="merchantName"></div>
                 </div>
             </div>
         </div>
     </div>
+
     <script>
+        // DOM 요소
         const searchBtn = document.getElementById('searchBtn');
+        const cameraBtn = document.getElementById('cameraBtn');
         const barcodeInput = document.getElementById('barcode');
         const resultBox = document.getElementById('resultBox');
+        const loadingEl = document.getElementById('loading');
+        const readerEl = document.getElementById('reader');
+
+        // 결과 요소
+        const brandText = document.getElementById('brandText');
         const productNameEl = document.getElementById('productName');
         const productImgEl = document.getElementById('productImg');
         const scoreEl = document.getElementById('score');
-        const allergensEl = document.getElementById('allergens');
+        const nutriScoreEl = document.getElementById('nutriScore');
         const badIngEl = document.getElementById('badIngredients');
+        const allergensEl = document.getElementById('allergens');
         const priceBox = document.getElementById('priceBox');
-        const recommendBox = document.getElementById('recommendBox');
-        const recommendList = document.getElementById('recommendList');
+        const priceAmount = document.getElementById('priceAmount');
+        const merchantName = document.getElementById('merchantName');
 
+        // 상태
+        let html5QrCode = null;
+        let isCameraActive = false;
+
+        // 카메라 스캐너 토글
+        cameraBtn.addEventListener('click', async () => {
+            if (isCameraActive) {
+                // 카메라 끄기
+                await stopCamera();
+            } else {
+                // 카메라 켜기
+                startCamera();
+            }
+        });
+
+        function startCamera() {
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+            readerEl.style.display = 'block';
+            cameraBtn.textContent = '⏹ 스캔 취소';
+            cameraBtn.classList.add('active');
+            isCameraActive = true;
+            resultBox.style.display = 'none';
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 150 }
+                },
+                (decodedText) => {
+                    // 스캔 성공
+                    barcodeInput.value = decodedText;
+                    stopCamera();
+                    handleSearch(decodedText);
+                },
+                (errorMessage) => {
+                    // 스캔 중 무시 (지속적으로 인식 시도)
+                }
+            ).catch((err) => {
+                alert('카메라 접근 권한이 필요하거나, 지원하지 않는 기기입니다.');
+                stopCamera();
+            });
+        }
+
+        async function stopCamera() {
+            if (html5QrCode && isCameraActive) {
+                try {
+                    await html5QrCode.stop();
+                } catch (err) {
+                    console.error("Failed to stop camera.", err);
+                }
+                html5QrCode.clear();
+            }
+            readerEl.style.display = 'none';
+            cameraBtn.textContent = '📷 카메라로 스캔';
+            cameraBtn.classList.remove('active');
+            isCameraActive = false;
+        }
+
+        // API 호출 함수
         async function fetchProduct(barcode) {
-            const res = await fetch(`/api/scan.js?barcode=${barcode}`);
+            const res = await fetch(`/api/scan?barcode=${barcode}`);
             return await res.json();
         }
+
         async function fetchPrice(barcode) {
-            // Placeholder – replace with real endpoint if available
-           const res = await fetch(`/api/price.js?barcode=${barcode}`);
+            const res = await fetch(`/api/price?barcode=${barcode}`);
             if (!res.ok) return null;
             return await res.json();
         }
-        async function fetchRecommendations(barcode) {
-            // Placeholder – mock data
-            return [
-                { name: '대체 제품 A', barcode: '1234567890123' },
-                { name: '대체 제품 B', barcode: '9876543210987' }
-            ];
-        }
 
-        function renderResult(data, priceInfo, recommendations) {
-            if (!data.success) {
+        // 결과 렌더링
+        function renderResult(data, priceData) {
+            if (!data || !data.success) {
                 alert('제품 정보를 찾을 수 없습니다.');
                 return;
             }
+
+            brandText.textContent = data.brand || '';
             productNameEl.textContent = data.productName;
-            productImgEl.src = data.image || '';
-            scoreEl.textContent = data.score;
-            allergensEl.textContent = data.allergens;
-            badIngEl.textContent = data.badIngredients.join(', ');
 
-            // 색상에 따라 배경 클래스 적용
-            resultBox.className = 'result-box';
-            if (data.score >= 80) resultBox.classList.add('good');
-            else if (data.score >= 50) resultBox.classList.add('soso');
-            else resultBox.classList.add('bad');
-
-            // 가격 표시
-            if (priceInfo && priceInfo.price) {
-                priceBox.textContent = `최저가: ${priceInfo.price}원`;
+            if (data.image) {
+                productImgEl.src = data.image;
+                productImgEl.style.display = 'block';
             } else {
-                priceBox.textContent = '';
+                productImgEl.style.display = 'none';
             }
 
-            // 대체 제품 표시
-            if (data.score < 50 && recommendations && recommendations.length) {
-                recommendBox.style.display = 'block';
-                recommendList.innerHTML = '';
-                recommendations.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = `${item.name} (바코드: ${item.barcode})`;
-                    recommendList.appendChild(li);
-                });
+            scoreEl.textContent = `${data.score}점`;
+            nutriScoreEl.textContent = data.nutriscore || 'N/A';
+
+            // 배열이면 join, 문자열이면 그대로 노출
+            badIngEl.textContent = Array.isArray(data.badIngredients) ? data.badIngredients.join(', ') : data.badIngredients;
+            allergensEl.textContent = data.allergens || '없음';
+
+            // 테마 변경
+            resultBox.className = 'result-box';
+            if (data.score >= 80) resultBox.classList.add('score-good');
+            else if (data.score >= 50) resultBox.classList.add('score-soso');
+            else resultBox.classList.add('score-bad');
+
+            // 가격 및 판매처 렌더링
+            if (priceData && priceData.price !== null) {
+                const formatter = new Intl.NumberFormat('ko-KR', { style: 'currency', currency: priceData.currency || 'KRW' });
+                priceAmount.textContent = formatter.format(priceData.price);
+                merchantName.textContent = `판매처: ${priceData.merchant || '확인 불가'}`;
+                priceBox.style.display = 'block';
             } else {
-                recommendBox.style.display = 'none';
+                priceBox.style.display = 'none';
             }
 
             resultBox.style.display = 'block';
         }
 
-        async function handleSearch() {
-            const barcode = barcodeInput.value.trim();
-            if (!barcode) { alert('바코드를 입력하세요'); return; }
+        // 메인 검색 핸들러
+        async function handleSearch(manualBarcode = null) {
+            const barcode = manualBarcode || barcodeInput.value.trim();
+            if (!barcode) {
+                alert('바코드 번호를 입력하거나 스캔해주세요.');
+                return;
+            }
+
+            // 카메라가 켜져있으면 끄기
+            if (isCameraActive) await stopCamera();
+
+            resultBox.style.display = 'none';
+            loadingEl.style.display = 'block';
+
             try {
                 const [productData, priceData] = await Promise.all([
                     fetchProduct(barcode),
                     fetchPrice(barcode)
                 ]);
-                const recommendations = productData.score < 50 ? await fetchRecommendations(barcode) : [];
-                renderResult(productData, priceData, recommendations);
+
+                loadingEl.style.display = 'none';
+                renderResult(productData, priceData);
             } catch (e) {
                 console.error(e);
-                alert('데이터를 가져오는 중 오류가 발생했습니다.');
+                loadingEl.style.display = 'none';
+                alert('데이터를 가져오는 중 오류가 발생했습니다. (서버 연결 에러)');
             }
         }
 
-        searchBtn.addEventListener('click', handleSearch);
-        barcodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+        searchBtn.addEventListener('click', () => handleSearch());
+        barcodeInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') handleSearch();
+        });
     </script>
 </body>
 
