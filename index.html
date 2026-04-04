@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>AI 식품 안전 스캐너 Pro</title>
+    <style>
+        :root {
+            --primary: #1a365d;
+            --success: #48bb78;
+            --warning: #ed8936;
+            --danger: #f56565;
+            --bg: #f7fafc;
+            --card-bg: #ffffff;
+            --text: #2d3748;
+        }
+
+        body {
+            font-family: -apple-system, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            margin: 0;
+            padding: 15px;
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            text-align: center;
+            margin-top: 0;
+            color: var(--primary);
+            font-size: 1.5rem;
+        }
+
+        #reader {
+            width: 100%;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #000;
+            border: 4px solid var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .scan-tip {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #718096;
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        input {
+            flex: 1;
+            padding: 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            outline: none;
+            transition: 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-search {
+            padding: 0 20px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .result-box {
+            display: none;
+            padding: 20px;
+            border-radius: 15px;
+            color: #fff;
+            margin-top: 10px;
+            animation: slideUp 0.3s ease;
+        }
+
+        .good {
+            background: var(--success);
+        }
+
+        .soso {
+            background: var(--warning);
+        }
+
+        .bad {
+            background: var(--danger);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .btn-web {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.25);
+            color: #fff;
+            text-align: center;
+            border-radius: 10px;
+            text-decoration: none;
+            margin-top: 15px;
+            font-weight: bold;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .price-box {
+            margin-top: 10px;
+            font-size: 1rem;
+            text-align: center;
+            color: var(--primary);
+        }
+
+        .recommendations {
+            margin-top: 15px;
+        }
+
+        .recommendations h3 {
+            margin: 0 0 5px 0;
+            font-size: 1rem;
+            color: var(--primary);
+        }
+
+        .recommendations ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .recommendations li {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <h2>AI 식품 안전 스캐너 Pro</h2>
+            <div class="input-group">
+                <input type="text" id="barcode" placeholder="바코드 입력" />
+                <button class="btn-search" id="searchBtn">검색</button>
+            </div>
+            <div class="result-box" id="resultBox">
+                <h3 id="productName"></h3>
+                <img id="productImg" src="" alt="제품 이미지" style="max-width:100%;border-radius:8px;margin:10px 0;" />
+                <p>점수: <span id="score"></span></p>
+                <p>알레르기 유발 성분: <span id="allergens"></span></p>
+                <p>주의 성분: <span id="badIngredients"></span></p>
+                <div class="price-box" id="priceBox"></div>
+                <div class="recommendations" id="recommendBox" style="display:none;">
+                    <h3>대체 제품 추천</h3>
+                    <ul id="recommendList"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const searchBtn = document.getElementById('searchBtn');
+        const barcodeInput = document.getElementById('barcode');
+        const resultBox = document.getElementById('resultBox');
+        const productNameEl = document.getElementById('productName');
+        const productImgEl = document.getElementById('productImg');
+        const scoreEl = document.getElementById('score');
+        const allergensEl = document.getElementById('allergens');
+        const badIngEl = document.getElementById('badIngredients');
+        const priceBox = document.getElementById('priceBox');
+        const recommendBox = document.getElementById('recommendBox');
+        const recommendList = document.getElementById('recommendList');
+
+        async function fetchProduct(barcode) {
+            const res = await fetch(`/api/scan?barcode=${barcode}`);
+            return await res.json();
+        }
+        async function fetchPrice(barcode) {
+            // Placeholder – replace with real endpoint if available
+            const res = await fetch(`/api/price?barcode=${barcode}`);
+            if (!res.ok) return null;
+            return await res.json();
+        }
+        async function fetchRecommendations(barcode) {
+            // Placeholder – mock data
+            return [
+                { name: '대체 제품 A', barcode: '1234567890123' },
+                { name: '대체 제품 B', barcode: '9876543210987' }
+            ];
+        }
+
+        function renderResult(data, priceInfo, recommendations) {
+            if (!data.success) {
+                alert('제품 정보를 찾을 수 없습니다.');
+                return;
+            }
+            productNameEl.textContent = data.productName;
+            productImgEl.src = data.image || '';
+            scoreEl.textContent = data.score;
+            allergensEl.textContent = data.allergens;
+            badIngEl.textContent = data.badIngredients.join(', ');
+
+            // 색상에 따라 배경 클래스 적용
+            resultBox.className = 'result-box';
+            if (data.score >= 80) resultBox.classList.add('good');
+            else if (data.score >= 50) resultBox.classList.add('soso');
+            else resultBox.classList.add('bad');
+
+            // 가격 표시
+            if (priceInfo && priceInfo.price) {
+                priceBox.textContent = `최저가: ${priceInfo.price}원`;
+            } else {
+                priceBox.textContent = '';
+            }
+
+            // 대체 제품 표시
+            if (data.score < 50 && recommendations && recommendations.length) {
+                recommendBox.style.display = 'block';
+                recommendList.innerHTML = '';
+                recommendations.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = `${item.name} (바코드: ${item.barcode})`;
+                    recommendList.appendChild(li);
+                });
+            } else {
+                recommendBox.style.display = 'none';
+            }
+
+            resultBox.style.display = 'block';
+        }
+
+        async function handleSearch() {
+            const barcode = barcodeInput.value.trim();
+            if (!barcode) { alert('바코드를 입력하세요'); return; }
+            try {
+                const [productData, priceData] = await Promise.all([
+                    fetchProduct(barcode),
+                    fetchPrice(barcode)
+                ]);
+                const recommendations = productData.score < 50 ? await fetchRecommendations(barcode) : [];
+                renderResult(productData, priceData, recommendations);
+            } catch (e) {
+                console.error(e);
+                alert('데이터를 가져오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        searchBtn.addEventListener('click', handleSearch);
+        barcodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+    </script>
+</body>
+
+</html>
