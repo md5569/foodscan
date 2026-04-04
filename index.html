@@ -409,6 +409,8 @@
 
             <div class="result-box" id="resultBox">
                 <div class="brand-text" id="brandText"></div>
+                <div style="font-size: 0.85rem; color: #8E8E93; font-weight: 800; margin-bottom: 8px;">🌍 원재료 산지: <span
+                        id="originText" style="color: #3A3A3C;"></span></div>
                 <h3 class="product-title" id="productName"></h3>
                 <img id="productImg" class="product-img" src="" alt="제품 사진" style="display: none;" />
 
@@ -587,11 +589,21 @@
         function populateList(elementId, items, className) {
             const el = document.getElementById(elementId); el.innerHTML = '';
             const list = Array.isArray(items) ? items : [items];
-            list.forEach(i => { const li = document.createElement('li'); li.className = className; li.textContent = i; el.appendChild(li); });
+            list.forEach(i => {
+                const li = document.createElement('li');
+                li.className = className;
+                if (typeof i === 'object' && i !== null) {
+                    li.innerHTML = `<strong>${i.name}</strong> <span style="font-size:0.85rem; color:#8E8E93; margin-left:4px; font-weight:600;">- ${i.risk}</span>`;
+                } else {
+                    li.textContent = i;
+                }
+                el.appendChild(li);
+            });
         }
 
         function renderResult(data, priceData) {
             document.getElementById('brandText').textContent = data.brand || '브랜드 미등록';
+            document.getElementById('originText').textContent = data.origin || '정보 없음';
             document.getElementById('productName').textContent = data.productName;
             const img = document.getElementById('productImg');
             if (data.image) { img.src = data.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
