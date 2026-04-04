@@ -4,34 +4,40 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>AI 식품 안전 스캐너 Pro</title>
+    <title>뚱땡이 아빠의 AI 식품 안전 스캐너</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap"
+        rel="stylesheet">
     <!-- QR Code / Barcode Scanner Library -->
     <script src="https://unpkg.com/html5-qrcode"></script>
 
     <style>
         :root {
-            --primary: #4F46E5;
-            --primary-hover: #4338CA;
-            --success: #10B981;
-            --warning: #F59E0B;
-            --danger: #EF4444;
-            --bg-gradient: linear-gradient(135deg, #f6f8fd 0%, #e9edf8 100%);
-            --card-bg: rgba(255, 255, 255, 0.75);
-            --text-dark: #1F2937;
-            --text-muted: #6B7280;
+            --primary: #FF5A5F;
+            /* Vibrant Coral-Red */
+            --primary-hover: #E34A4F;
+            --success: #00A699;
+            /* Teal */
+            --warning: #FFB400;
+            /* Warm Yellow */
+            --danger: #FF0000;
+            /* Pure Red */
+            --bg-gradient: linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%);
+            /* Deep Dark Apple style */
+            --card-bg: rgba(44, 44, 46, 0.85);
+            --text-light: #F2F2F7;
+            --text-muted: #AEAEB2;
         }
 
         body {
-            font-family: 'Inter', -apple-system, sans-serif;
+            font-family: 'Noto Sans KR', -apple-system, sans-serif;
             background: var(--bg-gradient);
             background-attachment: fixed;
             margin: 0;
             padding: 20px 15px;
-            color: var(--text-dark);
+            color: var(--text-light);
             display: flex;
             justify-content: center;
             min-height: 100vh;
@@ -40,27 +46,56 @@
 
         .container {
             width: 100%;
-            max-width: 480px;
+            max-width: 500px;
+        }
+
+        /* 뚱땡이 아빠 헤더 아트 */
+        .app-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .app-emoji {
+            font-size: 3.5rem;
+            margin-bottom: -10px;
+            display: inline-block;
+            animation: bounce 2s infinite ease-in-out;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        h2 {
+            font-family: 'Jua', sans-serif;
+            margin-top: 0;
+            color: #FFF;
+            font-size: 2rem;
+            letter-spacing: 1px;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            margin-bottom: 25px;
+        }
+
+        .highlight {
+            color: var(--primary);
         }
 
         .card {
             background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 28px;
             padding: 25px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
-            margin-bottom: 20px;
-        }
-
-        h2 {
-            text-align: center;
-            margin-top: 0;
-            color: var(--primary);
-            font-size: 1.6rem;
-            font-weight: 800;
-            letter-spacing: -0.5px;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
             margin-bottom: 20px;
         }
 
@@ -68,7 +103,7 @@
         .controls {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 15px;
             margin-bottom: 20px;
         }
 
@@ -79,32 +114,38 @@
 
         input {
             flex: 1;
-            padding: 14px 16px;
-            border: 2px solid #E5E7EB;
-            border-radius: 14px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
             font-size: 16px;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 700;
             outline: none;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(0, 0, 0, 0.3);
+            color: #FFF;
             transition: all 0.2s ease;
+        }
+
+        input::placeholder {
+            color: #636366;
+            font-weight: 400;
         }
 
         input:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+            box-shadow: 0 0 0 4px rgba(255, 90, 95, 0.2);
         }
 
         button {
-            padding: 14px 20px;
-            background: var(--primary);
+            padding: 16px 22px;
             color: #fff;
             border: none;
-            border-radius: 14px;
-            font-weight: 600;
+            border-radius: 16px;
+            font-weight: 900;
             font-size: 16px;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Noto Sans KR', sans-serif;
             cursor: pointer;
-            transition: background 0.2s ease, transform 0.1s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -112,177 +153,280 @@
         }
 
         button:active {
-            transform: scale(0.98);
+            transform: scale(0.96);
         }
 
-        button:hover {
+        .btn-search {
+            background: var(--primary);
+            box-shadow: 0 8px 20px rgba(255, 90, 95, 0.4);
+        }
+
+        .btn-search:hover {
             background: var(--primary-hover);
         }
 
         .btn-camera {
-            background: var(--text-dark);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             width: 100%;
         }
 
         .btn-camera:hover {
-            background: #000;
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .btn-camera.active {
-            background: var(--danger);
+            background: rgba(255, 0, 0, 0.6);
+            border-color: rgba(255, 0, 0, 0.8);
         }
 
         /* 스캐너 영역 */
         #reader {
             width: 100%;
-            border-radius: 16px;
+            border-radius: 20px;
             overflow: hidden;
             margin-bottom: 20px;
             display: none;
-            border: 3px solid var(--primary);
+            border: 2px solid var(--primary);
             background: #000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
 
-        /* 결과 영역 */
+        /* 결과 영역 (초기 숨김) */
         .result-box {
             display: none;
             padding: 24px;
-            border-radius: 20px;
-            color: #fff;
-            margin-top: 15px;
-            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 24px;
+            margin-top: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 등급별 백그라운드 매직 효과 */
+        .result-box::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.15;
+            z-index: 0;
+            pointer-events: none;
         }
 
         .score-good {
-            background: linear-gradient(135deg, var(--success), #059669);
+            background: #1C1C1E;
+        }
+
+        .score-good::before {
+            background: radial-gradient(circle at top right, var(--success), transparent 70%);
         }
 
         .score-soso {
-            background: linear-gradient(135deg, var(--warning), #D97706);
+            background: #1C1C1E;
+        }
+
+        .score-soso::before {
+            background: radial-gradient(circle at top right, var(--warning), transparent 70%);
         }
 
         .score-bad {
-            background: linear-gradient(135deg, var(--danger), #DC2626);
+            background: #1C1C1E;
+        }
+
+        .score-bad::before {
+            background: radial-gradient(circle at top right, var(--danger), transparent 70%);
+        }
+
+        .result-content {
+            position: relative;
+            z-index: 1;
         }
 
         .brand-text {
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            opacity: 0.8;
+            font-family: 'Jua', sans-serif;
+            font-size: 1.1rem;
+            color: var(--primary);
             margin-bottom: 4px;
-            font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .product-title {
             margin: 0;
-            font-size: 1.4rem;
-            font-weight: 800;
+            font-size: 1.6rem;
+            font-weight: 900;
             line-height: 1.3;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            color: #FFF;
         }
 
         .product-img {
             width: 100%;
             height: auto;
-            max-height: 250px;
+            max-height: 280px;
             object-fit: cover;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            background: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            margin-bottom: 25px;
+            background: #000;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* 배지 시스템 */
+        /* 배지 시스템 (카드 형태) */
         .info-grid {
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            margin-bottom: 20px;
+            gap: 14px;
+            margin-bottom: 25px;
         }
 
         .info-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 12px 16px;
-            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 16px 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .info-label {
-            font-size: 0.9rem;
-            font-weight: 600;
-            opacity: 0.9;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .badge {
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: 800;
-            background: rgba(255, 255, 255, 0.9);
-            color: var(--text-dark);
-            text-shadow: none;
+            padding: 6px 14px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 900;
+            background: rgba(255, 255, 255, 0.1);
+            color: #FFF;
+            text-align: center;
         }
 
         .badge-danger {
-            color: var(--danger);
+            background: rgba(255, 0, 0, 0.2);
+            color: #FF453A;
+            border: 1px solid rgba(255, 0, 0, 0.3);
         }
 
         .badge-warning {
-            color: #B45309;
+            background: rgba(255, 180, 0, 0.2);
+            color: #FFD60A;
+            border: 1px solid rgba(255, 180, 0, 0.3);
+        }
+
+        .badge-good {
+            background: rgba(0, 166, 153, 0.2);
+            color: #32D74B;
+            border: 1px solid rgba(0, 166, 153, 0.3);
         }
 
         .badge-score {
-            font-size: 1.1rem;
+            font-size: 1.3rem;
+            font-family: 'Jua', sans-serif;
+            background: transparent;
         }
 
-        /* 가격 영역 */
+        /* 가격 영역 (하이라이트) */
         .price-section {
-            background: rgba(255, 255, 255, 0.95);
-            color: var(--text-dark);
-            padding: 16px;
-            border-radius: 16px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+            padding: 20px;
+            border-radius: 20px;
             text-align: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            margin-top: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .price-section::after {
+            content: '🛍️';
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            font-size: 4rem;
+            opacity: 0.05;
         }
 
         .price-label {
-            font-size: 0.85rem;
+            font-size: 0.95rem;
             color: var(--text-muted);
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            font-weight: 700;
         }
 
         .price-amount {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--primary);
+            font-size: 2rem;
+            font-weight: 900;
+            color: #FFF;
             margin: 0;
+            font-family: 'Jua', sans-serif;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         }
 
         .merchant-name {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: var(--text-dark);
-            margin-top: 4px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-top: 8px;
         }
 
-        /* 로딩 텍스트 */
+        .price-fallback-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 12px 20px;
+            background: #03C75A;
+            /* Naver Green */
+            color: #fff;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 900;
+            font-size: 0.95rem;
+            box-shadow: 0 8px 20px rgba(3, 199, 90, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .price-fallback-btn:hover {
+            background: #02b350;
+            transform: translateY(-2px);
+        }
+
         .loading {
             text-align: center;
-            padding: 20px;
-            font-weight: 600;
+            padding: 40px 20px;
+            font-weight: 900;
+            font-size: 1.2rem;
             color: var(--primary);
             display: none;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
 
         @keyframes slideUp {
             from {
-                transform: translateY(30px);
+                transform: translateY(40px);
                 opacity: 0;
             }
 
@@ -296,58 +440,71 @@
 
 <body>
     <div class="container">
+
+        <div class="app-header">
+            <div class="app-emoji">👨‍👧‍👦</div>
+            <h2>뚱땡이 아빠의<br><span class="highlight">AI 식품 안전 스캐너</span></h2>
+        </div>
+
         <div class="card">
-            <h2>AI 식품 안전 스캐너 Pro</h2>
 
             <div class="controls">
                 <button type="button" class="btn-camera" id="cameraBtn">
-                    📷 카메라로 스캔
+                    📸 스마트폰 카메라로 바코드 스캔
                 </button>
                 <div id="reader"></div>
 
                 <div class="input-group">
-                    <input type="text" id="barcode" placeholder="바코드 번호 직접 입력" />
-                    <button class="btn-search" id="searchBtn">검색</button>
+                    <input type="tel" id="barcode" placeholder="바코드 번호를 직접 입력하세요" />
+                    <button class="btn-search" id="searchBtn">🔍 검색</button>
                 </div>
             </div>
 
-            <div class="loading" id="loading">데이터를 분석 중입니다... 🔍</div>
+            <div class="loading" id="loading">데이터를 분석 중입니다... 💪</div>
 
             <div class="result-box" id="resultBox">
-                <div class="brand-text" id="brandText"></div>
-                <h3 class="product-title" id="productName"></h3>
-                <img id="productImg" class="product-img" src="" alt="제품 이미지" style="display: none;" />
+                <div class="result-content">
+                    <div class="brand-text" id="brandText"></div>
+                    <h3 class="product-title" id="productName"></h3>
+                    <img id="productImg" class="product-img" src="" alt="제품 사진" style="display: none;" />
 
-                <div class="info-grid">
-                    <div class="info-row">
-                        <span class="info-label">안전 점수</span>
-                        <span class="badge badge-score" id="score"></span>
+                    <div class="info-grid">
+                        <div class="info-row">
+                            <span class="info-label">🛡️ 안전 점수</span>
+                            <span class="badge badge-score" id="score"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">🏃 건강 등급표</span>
+                            <span class="badge" id="nutriScore"></span>
+                        </div>
+                        <div class="info-row" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                            <span class="info-label">⚠️ 주시해야 할 유해 성분</span>
+                            <span class="badge badge-danger" id="badIngredients"
+                                style="width: 100%; text-align: left; padding: 12px; box-sizing: border-box; line-height: 1.5;"></span>
+                        </div>
+                        <div class="info-row" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                            <span class="info-label">🤧 알레르기 유발 물질</span>
+                            <span class="badge badge-warning" id="allergens"
+                                style="width: 100%; text-align: left; padding: 12px; box-sizing: border-box; line-height: 1.5;"></span>
+                        </div>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">건강 등급 (Nutri-Score)</span>
-                        <span class="badge" id="nutriScore"></span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">주의 성분</span>
-                        <span class="badge badge-danger" id="badIngredients"></span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">알레르기</span>
-                        <span class="badge badge-warning" id="allergens"></span>
-                    </div>
-                </div>
 
-                <div class="price-section" id="priceBox" style="display: none;">
-                    <div class="price-label">최저가 정보</div>
-                    <h4 class="price-amount" id="priceAmount"></h4>
-                    <div class="merchant-name" id="merchantName"></div>
+                    <div class="price-section" id="priceBox">
+                        <div class="price-label">💰 현재 파악된 인터넷 최저가</div>
+                        <h4 class="price-amount" id="priceAmount"></h4>
+                        <div class="merchant-name" id="merchantName"></div>
+                        <a href="#" id="priceFallbackLink" target="_blank" class="price-fallback-btn"
+                            style="display:none;">
+                            🟢 네이버 쇼핑에서 초저가 검색하기
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // DOM 요소
+        // DOM 요소 연결
         const searchBtn = document.getElementById('searchBtn');
         const cameraBtn = document.getElementById('cameraBtn');
         const barcodeInput = document.getElementById('barcode');
@@ -355,7 +512,6 @@
         const loadingEl = document.getElementById('loading');
         const readerEl = document.getElementById('reader');
 
-        // 결과 요소
         const brandText = document.getElementById('brandText');
         const productNameEl = document.getElementById('productName');
         const productImgEl = document.getElementById('productImg');
@@ -363,72 +519,56 @@
         const nutriScoreEl = document.getElementById('nutriScore');
         const badIngEl = document.getElementById('badIngredients');
         const allergensEl = document.getElementById('allergens');
+
         const priceBox = document.getElementById('priceBox');
         const priceAmount = document.getElementById('priceAmount');
         const merchantName = document.getElementById('merchantName');
+        const priceFallbackLink = document.getElementById('priceFallbackLink');
 
-        // 상태
         let html5QrCode = null;
         let isCameraActive = false;
 
-        // 카메라 스캐너 토글
+        // 카메라 토글 
         cameraBtn.addEventListener('click', async () => {
-            if (isCameraActive) {
-                // 카메라 끄기
-                await stopCamera();
-            } else {
-                // 카메라 켜기
-                startCamera();
-            }
+            if (isCameraActive) await stopCamera();
+            else startCamera();
         });
 
         function startCamera() {
-            if (!html5QrCode) {
-                html5QrCode = new Html5Qrcode("reader");
-            }
+            if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
             readerEl.style.display = 'block';
-            cameraBtn.textContent = '⏹ 스캔 취소';
+            cameraBtn.innerHTML = '⏹ 스캔 취소하기';
             cameraBtn.classList.add('active');
             isCameraActive = true;
             resultBox.style.display = 'none';
 
             html5QrCode.start(
                 { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 150 }
-                },
+                { fps: 15, qrbox: { width: 280, height: 200 } },
                 (decodedText) => {
-                    // 스캔 성공
                     barcodeInput.value = decodedText;
                     stopCamera();
                     handleSearch(decodedText);
                 },
-                (errorMessage) => {
-                    // 스캔 중 무시 (지속적으로 인식 시도)
-                }
+                (errorMessage) => { /* ignore */ }
             ).catch((err) => {
-                alert('카메라 접근 권한이 필요하거나, 지원하지 않는 기기입니다.');
+                alert('카메라 실행에 실패했습니다. (권한 거부 또는 미지원 기기)');
                 stopCamera();
             });
         }
 
         async function stopCamera() {
             if (html5QrCode && isCameraActive) {
-                try {
-                    await html5QrCode.stop();
-                } catch (err) {
-                    console.error("Failed to stop camera.", err);
-                }
+                try { await html5QrCode.stop(); } catch (err) { }
                 html5QrCode.clear();
             }
             readerEl.style.display = 'none';
-            cameraBtn.textContent = '📷 카메라로 스캔';
+            cameraBtn.innerHTML = '📸 스마트폰 카메라로 바코드 스캔';
             cameraBtn.classList.remove('active');
             isCameraActive = false;
         }
 
-        // API 호출 함수
+        // 백엔드 API 호출 // `.js` 제외 
         async function fetchProduct(barcode) {
             const res = await fetch(`/api/scan?barcode=${barcode}`);
             return await res.json();
@@ -440,14 +580,14 @@
             return await res.json();
         }
 
-        // 결과 렌더링
-        function renderResult(data, priceData) {
+        // 화면에 정보 세팅
+        function renderResult(data, priceData, barcode) {
             if (!data || !data.success) {
-                alert('제품 정보를 찾을 수 없습니다.');
+                alert('앗! 뚱땡이 아빠의 DB에 아직 등록되지 않은 상품이에요 🥲');
                 return;
             }
 
-            brandText.textContent = data.brand || '';
+            brandText.textContent = data.brand || '브랜드 미상';
             productNameEl.textContent = data.productName;
 
             if (data.image) {
@@ -457,41 +597,60 @@
                 productImgEl.style.display = 'none';
             }
 
-            scoreEl.textContent = `${data.score}점`;
-            nutriScoreEl.textContent = data.nutriscore || 'N/A';
+            // 점수 색상 변화
+            const scoreNum = Number(data.score);
+            scoreEl.textContent = `${data.score}점 / 100점`;
+            scoreEl.className = 'badge badge-score ' + (scoreNum >= 80 ? 'badge-good' : (scoreNum >= 50 ? 'badge-warning' : 'badge-danger'));
 
-            // 배열이면 join, 문자열이면 그대로 노출
-            badIngEl.textContent = Array.isArray(data.badIngredients) ? data.badIngredients.join(', ') : data.badIngredients;
+            nutriScoreEl.textContent = data.nutriscore || '미평가';
+
+            // 배열로 넘어오는 에러 방지 (최종 문자열 파싱)
+            const badList = Array.isArray(data.badIngredients) ? data.badIngredients.join(', ') : data.badIngredients;
+            badIngEl.textContent = badList;
+            if (badList.includes("건강한")) {
+                badIngEl.className = 'badge badge-good';
+            } else {
+                badIngEl.className = 'badge badge-danger';
+            }
+
             allergensEl.textContent = data.allergens || '없음';
 
-            // 테마 변경
+            // 테마 적용
             resultBox.className = 'result-box';
-            if (data.score >= 80) resultBox.classList.add('score-good');
-            else if (data.score >= 50) resultBox.classList.add('score-soso');
+            if (scoreNum >= 80) resultBox.classList.add('score-good');
+            else if (scoreNum >= 50) resultBox.classList.add('score-soso');
             else resultBox.classList.add('score-bad');
 
-            // 가격 및 판매처 렌더링
+            // 💰 가격 및 판매처 설정 로직
             if (priceData && priceData.price !== null) {
+                // 가격 정보가 있을 때
                 const formatter = new Intl.NumberFormat('ko-KR', { style: 'currency', currency: priceData.currency || 'KRW' });
                 priceAmount.textContent = formatter.format(priceData.price);
                 merchantName.textContent = `판매처: ${priceData.merchant || '확인 불가'}`;
-                priceBox.style.display = 'block';
+                merchantName.style.display = 'block';
+                priceFallbackLink.style.display = 'none';
+                priceAmount.style.color = '#FFF';
             } else {
-                priceBox.style.display = 'none';
+                // 가격 정보가 없을 때 ➡️ 네이버 쇼핑 링크 제공
+                priceAmount.textContent = "해외/국내 재고 파악 불가";
+                priceAmount.style.color = "var(--text-muted)";
+                priceAmount.style.fontSize = "1.2rem";
+                merchantName.style.display = 'none';
+
+                priceFallbackLink.href = `https://search.shopping.naver.com/search/all?query=${barcode}`;
+                priceFallbackLink.style.display = 'inline-block';
             }
 
             resultBox.style.display = 'block';
         }
 
-        // 메인 검색 핸들러
         async function handleSearch(manualBarcode = null) {
             const barcode = manualBarcode || barcodeInput.value.trim();
             if (!barcode) {
-                alert('바코드 번호를 입력하거나 스캔해주세요.');
+                alert('바코드 숫자를 입력하거나 카메라로 찍어주세요!');
                 return;
             }
 
-            // 카메라가 켜져있으면 끄기
             if (isCameraActive) await stopCamera();
 
             resultBox.style.display = 'none';
@@ -504,11 +663,11 @@
                 ]);
 
                 loadingEl.style.display = 'none';
-                renderResult(productData, priceData);
+                renderResult(productData, priceData, barcode);
             } catch (e) {
                 console.error(e);
                 loadingEl.style.display = 'none';
-                alert('데이터를 가져오는 중 오류가 발생했습니다. (서버 연결 에러)');
+                alert('서버와 통신하는 중에 문제가 생겼어요! 네트워크를 확인해주세요.');
             }
         }
 
