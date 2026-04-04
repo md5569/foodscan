@@ -424,8 +424,11 @@
                         id="greenwashingText"></div>
                 </div>
 
-                <!-- Nutri-Score (유럽 인증마크) -->
-                <div id="nutriScoreContainer" style="display:none; text-align:center; margin-bottom: 25px;">
+                <!-- K-FDA Macros -->
+                <div style="font-weight:900; margin: 20px 0 10px 0; display:flex; align-items:center; gap:8px;">
+                    <span>🇰🇷 식약처 1일 영양성분 섭취 기준 비율</span>
+                </div>
+                <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div id="nutriScoreBadge"
                         style="display:inline-block; padding: 4px 18px 6px 18px; border-radius: 20px; font-weight:900; color:#FFF; font-size:1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
                         Nutri-Score 공식 등급: <span id="nutriScoreLetter"
@@ -502,22 +505,6 @@
                     <ul class="ul-list" id="allergens"></ul>
                 </div>
 
-                <div class="health-section" id="advisorSection"
-                    style="display:none; background:#F0F8FF; border-color:#BBE1FA;">
-                    <h4 class="health-title" style="color: #007AFF;">💡 아빠의 건강 코멘트 (섭취 가이드)</h4>
-                    <ul class="ul-list">
-                        <li id="guideText" style="background:transparent; border:none; padding:5px 0;"></li>
-                        <li id="alternativeBox"
-                            style="background:#FFF; border-left:4px solid #007AFF; margin-top:10px; display:none;">
-                            <strong style="color:var(--text-dark);">대체품 추천:</strong> <span id="alternativeText"
-                                style="color:var(--text-dark);"></span><br>
-                            <a id="alternativeLink" href="#" target="_blank"
-                                style="display:inline-block; margin-top:8px; color:#007AFF; font-weight:800; text-decoration:none;">🛒
-                                건강한 대체품 탐색하기 ➔</a>
-                        </li>
-                    </ul>
-                </div>
-
                 <div class="store-dashboard">
                     <div class="store-header">💰 글로벌 4대 쇼핑몰 비교 (풀네임 검색)</div>
                     <div class="store-grid" id="storeGrid"></div>
@@ -536,20 +523,46 @@
         const storeGrid = document.getElementById('storeGrid');
 
         let html5QrCode = null;
-        let isCameraActive = false;
+        let isScanning = false;
 
-        cameraBtn.addEventListener('click', async () => { if (isCameraActive) await stopCamera(); else startCamera(); });
-        function startCamera() {
-            if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-            readerEl.style.display = 'block'; cameraBtn.innerHTML = '⏹ 카메라 끄기'; cameraBtn.classList.add('active'); isCameraActive = true; resultBox.style.display = 'none';
-            html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 250, height: 150 } }, (decodedText) => { barcodeInput.value = decodedText; stopCamera(); handleSearch(decodedText); }, () => { }).catch(err => { alert('카메라 권한을 허용해주세요.'); stopCamera(); });
-        }
-        async function stopCamera() { if (html5QrCode && isCameraActive) { try { await html5QrCode.stop(); } catch (e) { } html5QrCode.clear(); } readerEl.style.display = 'none'; cameraBtn.innerHTML = '📸 폰 카메라로 바코드 스캔하기'; cameraBtn.classList.remove('active'); isCameraActive = false; }
+        const handleScanSuccess = async (decodedText, decodedResult) => {
+            if (isScanning) {
+                isScanning = false;
+                try {
+                    if (html5QrCode.getState() === 2) {
+                        html5QrCode.pause(true);
+                    }
+                } catch (e) { }
+                readerEl.style.display = 'none';
+                barcodeInput.value = decodedText;
+                handleSearch(decodedText);
+            }
+        };
+
+        cameraBtn.addEventListener('click', async () => {
+            if (isScanning) {
+                isScanning = false;
+                try { if (html5QrCode.getState() === 2) html5QrCode.pause(true); } catch (e) { }
+                readerEl.style.display = 'none';
+                cameraBtn.innerHTML = '📸 폰 카메라로 바코드 스캔하기';
+            } else {
+                if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+                readerEl.style.display = 'block';
+                cameraBtn.innerHTML = '⏹ 카메라 끄기';
+                isScanning = true;
+                try {
+                    if (html5QrCode.getState() === 3) {
+                        html5QrCode.resume();
+                    } else {
+                        await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } }, handleScanSuccess, undefined);
+                    }
+                } catch (err) { alert('카메라 권한을 허용해주세요.'); isScanning = false; readerEl.style.display = 'none'; }
+            }
+        });
 
         async function handleSearch(manualBarcode = null) {
             const barcode = manualBarcode || barcodeInput.value.trim();
             if (!barcode) { alert('바코드를 먼저 입력해주세요!'); return; }
-            if (isCameraActive) await stopCamera();
             resultBox.style.display = 'none'; loadingEl.style.display = 'block';
 
             try {
@@ -577,7 +590,6 @@
             const img = document.getElementById('productImg');
             if (data.image) { img.src = data.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
 
-            // Certifications
             const certCont = document.getElementById('certificationContainer');
             certCont.innerHTML = '';
             if (data.certifications && data.certifications.length > 0) {
@@ -591,14 +603,12 @@
                 });
             } else { certCont.style.display = 'none'; }
 
-            // Greenwashing Alert
             const gwCont = document.getElementById('greenwashingContainer');
             if (data.greenwashingAlert) {
                 gwCont.style.display = 'block';
                 document.getElementById('greenwashingText').textContent = data.greenwashingAlert;
             } else { gwCont.style.display = 'none'; }
 
-            // Nutri-Score
             const scoreCont = document.getElementById('nutriScoreContainer');
             const scoreBadge = document.getElementById('nutriScoreBadge');
             const scoreLetter = document.getElementById('nutriScoreLetter');
@@ -609,7 +619,6 @@
                 scoreBadge.style.background = colors[data.nutriGrade] || '#8E8E93';
             } else { scoreCont.style.display = 'none'; }
 
-            // Target Warnings
             const twCont = document.getElementById('targetWarningsContainer');
             twCont.innerHTML = '';
             if (data.targetWarnings && data.targetWarnings.length > 0) {
@@ -622,7 +631,6 @@
                 });
             } else { twCont.style.display = 'none'; }
 
-            // Score & Calories
             const sc = document.getElementById('score');
             sc.textContent = `${data.score}점`; sc.className = 'metric-value ' + (data.score >= 80 ? 'good' : (data.score >= 50 ? '' : 'bad'));
 
@@ -642,7 +650,6 @@
 
             document.getElementById('calories').textContent = data.calories || '비공개';
 
-            // UK Traffic Light Macros
             if (data.macros) {
                 const mapMacro = (htmlKey, dataKey) => {
                     if (!data.macros[dataKey]) return;
@@ -659,17 +666,6 @@
 
             populateList('badIngredients', data.badIngredients, String(data.badIngredients).includes('깨끗한') ? 'li-good' : 'li-bad');
             populateList('allergens', data.allergens, 'li-allergy');
-
-            const advisorSec = document.getElementById('advisorSection');
-            if (data.guide || data.alternative) {
-                advisorSec.style.display = 'block';
-                document.getElementById('guideText').textContent = data.guide || '';
-                if (data.alternative) {
-                    document.getElementById('alternativeBox').style.display = 'block';
-                    document.getElementById('alternativeText').textContent = data.alternative.text;
-                    document.getElementById('alternativeLink').href = `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(data.alternative.keyword)}`;
-                } else { document.getElementById('alternativeBox').style.display = 'none'; }
-            } else { advisorSec.style.display = 'none'; }
 
             storeGrid.innerHTML = '';
             if (priceData && priceData.stores) {
