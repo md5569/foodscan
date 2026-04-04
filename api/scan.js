@@ -9,10 +9,32 @@ module.exports = async (req, res) => {
         if (data.status === 1) {
             const p = data.product;
 
-            const additives = p.additives_tags || [];
-            const ingredients = (p.ingredients_text_ko || p.ingredients_text || "").toLowerCase();
+            let brandInfo = p.brands || "";
+            let rawProductName = p.product_name_ko || p.product_name || "미등록 상품";
+            let fullName = rawProductName;
+            if (brandInfo && !rawProductName.includes(brandInfo)) {
+                fullName = `${brandInfo} ${rawProductName}`.trim();
+            }
 
-            // 유해 성분 매핑
+            let additives = p.additives_tags || [];
+            let ingredients = (p.ingredients_text_ko || p.ingredients_text || "").toLowerCase();
+            let isScraped = false;
+
+            // [해결책 B] 국내 상품 원재료 데이터가 빈약할 경우, 네이버 웹 통합 검색으로 고속 크롤링
+            if (!ingredients || ingredients.length < 5) {
+                try {
+                    // "상품명 + 원재료명" 을 검색하여 스니펫의 텍스트 덩어리를 긁어옴
+                    const scrapeRes = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(fullName + ' 원재료명')}`);
+                    const html = await scrapeRes.text();
+                    const plainText = html.replace(/<[^>]*>?/gm, ' '); // 정규식으로 HTML 태그 싹 날리기
+                    ingredients = plainText; // 긁어온 엄청난 양의 텍스트에 유해 성분 키워드가 걸리는지 판독
+                    isScraped = true;
+                } catch (e) {
+                    console.log("Scraping fallback failed");
+                }
+            }
+
+            // 유해 성분 매핑 (강력한 필터링)
             const warningDict = {
                 "설탕": "설탕 (비만 및 간 손상 위험 ⚠️)", "sugar": "설탕 (혈당 급상승 ⚠️)",
                 "과당": "액상과당 (혈당을 급격히 올려 비만 유발 ⚠️)", "물엿": "물엿 (혈당 급상승 ⚠️)",
@@ -29,15 +51,23 @@ module.exports = async (req, res) => {
             const detectedBad = warningKeywords.filter(word => ingredients.includes(word)).map(word => warningDict[word]);
             const uniqueBad = [...new Set(detectedBad)];
 
-            let score = 100 - (additives.length * 5) - (uniqueBad.length * 7);
-            score = Math.max(10, score);
+            // 점수 산정 투명화 로직 (Score Breakdown)
+            let baseScore = 100;
+            const scoreBreakdown = [];
 
-            let brandInfo = p.brands || "";
-            let rawProductName = p.product_name_ko || p.product_name || "미등록 상품";
-            let fullName = rawProductName;
-            if (brandInfo && !rawProductName.includes(brandInfo)) {
-                fullName = `${brandInfo} ${rawProductName}`.trim();
+            if (additives.length > 0) {
+                const addPenalty = additives.length * 5;
+                scoreBreakdown.push(`일반 화학 첨가물 ${additives.length}개 발견 (-${addPenalty}점)`);
+                baseScore -= addPenalty;
             }
+
+            if (uniqueBad.length > 0) {
+                const toxicPenalty = uniqueBad.length * 10;
+                scoreBreakdown.push(`핵심 유해/주의성분 ${uniqueBad.length}개 발견 (-${toxicPenalty}점)`);
+                baseScore -= toxicPenalty;
+            }
+
+            const score = Math.max(10, baseScore); // 최저 방어선 10점
 
             // 칼로리 로직
             const kcal100 = p.nutriments && p.nutriments['energy-kcal_100g'] ? Math.round(p.nutriments['energy-kcal_100g']) : null;
@@ -78,24 +108,37 @@ module.exports = async (req, res) => {
             // 타겟 맞춤형 질환 경고 모델
             const targetWarnings = [];
             const isHighSugar = sugars > 15;
-            const hasBadSweeteners = Object.keys(warningDict).some(word => ingredients.includes(word) && ["비만", "혈당", "당", "상승"].some(w => warningDict[word].includes(w)));
-            if (isHighSugar || hasBadSweeteners) targetWarnings.push("🩸 당뇨/혈당 스파이크 경고 (당류 과다 또는 혈당 교란/인공 감미료 포함)");
+            const hasBadSweeteners = warningKeywords.some(word => ingredients.includes(word) && ["비만", "혈당", "당", "상승"].some(w => warningDict[word].includes(w)));
+            if (isHighSugar || hasBadSweeteners) targetWarnings.push("🩸 당뇨/혈당 스파이크 경고 (당류 과다 또는 혈당 교란 감미료 발견)");
 
             if (sodium > 0.6) targetWarnings.push("🫀 심혈관/고혈압 주의 (1일 권장 나트륨 초과 위험 수준)");
 
-            const hasBadChemicals = Object.keys(warningDict).some(word => ingredients.includes(word) && ["발암", "ADHD", "벤젠", "색소"].some(w => warningDict[word].includes(w)));
+            const hasBadChemicals = warningKeywords.some(word => ingredients.includes(word) && ["발암", "ADHD", "벤젠", "색소"].some(w => warningDict[word].includes(w)));
             if (hasBadChemicals || ingredients.includes('카페인') || ingredients.includes('caffeine')) {
-                targetWarnings.push("👶 영유아/임산부 섭취 강력 제한 요망 (발암/타르색소/합성보존료/카페인 등 발견)");
+                targetWarnings.push("👶 영유아/임산부 섭취 강력 제한 요망 (발암/타르색소/보존료/카페인 발견)");
             }
+
+            let greenwashingAlert = null;
+            const fakeKeywords = ["제로", "zero", "라이트", "light", "무가당", "슈가프리", "슈거프리", "천연", "내추럴", "내츄럴", "natural"];
+            const isMarketingFake = fakeKeywords.some(kw => fullName.toLowerCase().includes(kw));
+            if (isMarketingFake && uniqueBad.length > 0) {
+                greenwashingAlert = "🚨 [그린워싱 주의] 무늬만 건강식품! 마케팅은 '제로/천연'을 표방하나, 실제로는 유해 감미료나 화학제가 다량 발견되었습니다.";
+            }
+
+            const certifications = [];
+            const allTextForCert = (fullName + ingredients + (p.labels_tags || []).join(' ')).toLowerCase();
+            if (allTextForCert.includes('haccp') || allTextForCert.includes('해썹')) certifications.push("식약처 HACCP 시스템 인증");
+            if (allTextForCert.includes('유기농') || allTextForCert.includes('organic')) certifications.push("유기농(Organic) 인증 🌱");
+            if (allTextForCert.includes('무항생제') || allTextForCert.includes('무농약')) certifications.push("무농약/무항생제 검증 🌿");
 
             const novaDesc = { 1: "자연 원재료 (건강식 🟢)", 2: "기본 가공 식재료 (보통 🟡)", 3: "가공식품 (화학첨가물 섭취 주의 🟠)", 4: "초가공식품 (정제/화학첨가물 다량 주의 🔴)" };
             const nova = p.nova_group ? `NOVA ${p.nova_group} - ${novaDesc[p.nova_group]}` : "정보 없음";
 
             const allergenDict = {
-                "milk": "우유 (유당불내증/복통 유발)", "soybeans": "대두 (알레르기 원인)", "wheat": "밀 (글루텐 함유, 체강병 주의)",
-                "eggs": "달걀 (단백질 알레르기)", "peanuts": "땅콩 (호흡곤란 아나필락시스 위험 🔴)", "fish": "생선 (민감반응 주의)", "crustaceans": "갑각류 (얼굴 붓기/호흡곤란 🔴)",
-                "tree nuts": "견과류", "mustard": "머스타드", "sesame": "참깨", "sulphites": "아황산염 (천식 발작 위험 🔴)",
-                "molluscs": "연체동물", "almond": "아몬드", "gluten": "글루텐", "soy": "콩 단백질", "pork": "돼지고기", "beef": "소고기"
+                "milk": "우유", "soybeans": "대두", "wheat": "밀", "eggs": "달걀", "peanuts": "땅콩 (🔴 쇼크 위험)",
+                "fish": "생선", "crustaceans": "갑각류 (🔴)", "tree nuts": "견과류", "mustard": "머스타드",
+                "sesame": "참깨", "sulphites": "아황산염 (🔴 천식 주의)", "molluscs": "연체동물", "almond": "아몬드",
+                "gluten": "글루텐", "soy": "콩", "pork": "돼지고기", "beef": "소고기"
             };
 
             let translatedAllergens = ["없음"];
@@ -110,24 +153,26 @@ module.exports = async (req, res) => {
             let frequencyGuide = "";
             if (score >= 80) frequencyGuide = "전 세계 영양학 기준 상위 등급! 매일 식단에 포함시켜도 안심할 수 있는 건강한 성분입니다. 👨‍⚕️🟢";
             else if (score >= 60) frequencyGuide = "보통 수준의 가공식품입니다. 화학 첨가물이 일부 포함되어 있으므로 **주 2~3회 이내**로 조절해 드시는 것을 권장합니다. 🟡";
-            else if (score >= 40) frequencyGuide = "주의! 첨가물과 설탕/나트륨 비율이 높은 초가공식품일 확률이 높습니다. 가급적 **주 1회 이하**의 특식으로만 양보하세요. 🟠";
-            else frequencyGuide = "경고! WHO 기준 체내 염증을 유발할 수 있는 다량의 화학성분(발색제, 감미료 등)이 포함되어 있습니다. 가급적 **월 1~2회 미만** 섭취를 강력히 안내합니다. 🔴";
+            else if (score >= 40) frequencyGuide = "주의! 화학 첨가물이나 유해 성분이 여럿 관찰되었습니다. 가급적 **주 1회 이하**의 특식으로만 양보하세요. 🟠";
+            else frequencyGuide = "경고! WHO 기준 체내 염증을 유발할 수 있는 다량의 화학성분(발색제, 감미료 등)이 포함되어 있습니다. 강력히 **월 1~2회 미만** 섭취를 안내합니다. 🔴";
 
             let fallbackName = (rawProductName + " " + ingredients).toLowerCase();
             let alternative = null;
             if (fallbackName.includes('콜라') || fallbackName.includes('음료')) alternative = { keyword: "제로 콤부차", text: "설탕 덩어리 음료 대신 유산균이 풍부한 '무가당 콤부차'나 '탄산수'는 어떠세요?" };
-            else if (fallbackName.includes('라면') || fallbackName.includes('noodle')) alternative = { keyword: "건면 라면", text: "기름에 튀긴 면 대신 트랜스지방을 뺀 '건면' 또는 '두부면'을 추천합니다!" };
+            else if (fallbackName.includes('라면') || fallbackName.includes('noodle')) alternative = { keyword: "건면 라면", text: "기름에 튀긴 면 대신 트랜스지방을 뺀 '건면'을 추천합니다!" };
             else if (fallbackName.includes('과자') || fallbackName.includes('snack')) alternative = { keyword: "통밀 크래커", text: "화학조미료 범벅 과자 대신 식이섬유가 풍부한 '통밀 크래커'가 좋습니다!" };
-            else if (fallbackName.includes('소시지') || fallbackName.includes('햄')) alternative = { keyword: "무항생제 무첨가 햄", text: "발암물질(아질산나트륨)이 없는 '무첨가 수제 햄'이 안전합니다!" };
-            else if (fallbackName.includes('아이스크림')) alternative = { keyword: "저칼로리 아이스크림", text: "당류가 폭발하는 일반 아이스크림 대신 '알룰로스 아이스크림'을 드셔보세요!" };
-            else if (score < 70) alternative = { keyword: "유기농 과자", text: "화학 첨가물이 너무 많아요! '유기농 자연 원물식품'으로 교체하는 것은 어떨까요?" };
+            else if (fallbackName.includes('소시지') || fallbackName.includes('햄')) alternative = { keyword: "무항생제 무첨가 햄", text: "발암물질(아질산나트륨)이 없는 '무첨가 햄'이 최소한 안전합니다!" };
+            else if (fallbackName.includes('아이스크림')) alternative = { keyword: "저칼로리 아이스크림", text: "당류가 폭발하는 일반 아이스크림 대신 '알룰로스 아이스크림'을 시도해보세요!" };
+            else if (score < 70) alternative = { keyword: "유기농 과자", text: "화학 첨가물이 너무 많아요! '자연식품/유기농'으로 교체하는 것은 어떨까요?" };
 
             res.status(200).json({
                 success: true, productName: rawProductName, brand: brandInfo, fullName: fullName,
-                nutriGrade: p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : null, // A, B, C, D, E
+                nutriGrade: p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : null,
                 calories: caloriesText, nova: nova, macros: macros, targetWarnings: targetWarnings,
-                badIngredients: uniqueBad.length > 0 ? uniqueBad : (additives.length > 0 ? ["첨가물이 일부 구성(안전범위)"] : ["깨끗한 친환경 원료 👍"]),
-                score: score, allergens: translatedAllergens,
+                greenwashingAlert: greenwashingAlert, certifications: certifications,
+                badIngredients: uniqueBad.length > 0 ? uniqueBad : (additives.length > 0 ? ["가벼운 첨가물이 일부 구성(안전범위)"] : ["깨끗한 친환경 원료 👍"]),
+                score: score, scoreBreakdown: scoreBreakdown, isScraped: isScraped,
+                allergens: translatedAllergens,
                 image: p.image_front_url || p.image_url || p.image_front_small_url || "",
                 guide: frequencyGuide, alternative: alternative
             });
