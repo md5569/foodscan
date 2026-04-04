@@ -424,11 +424,8 @@
                         id="greenwashingText"></div>
                 </div>
 
-                <!-- K-FDA Macros -->
-                <div style="font-weight:900; margin: 20px 0 10px 0; display:flex; align-items:center; gap:8px;">
-                    <span>🇰🇷 식약처 1일 영양성분 섭취 기준 비율</span>
-                </div>
-                <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <!-- Nutri-Score (유럽 인증마크) -->
+                <div id="nutriScoreContainer" style="display:none; text-align:center; margin-bottom: 25px;">
                     <div id="nutriScoreBadge"
                         style="display:inline-block; padding: 4px 18px 6px 18px; border-radius: 20px; font-weight:900; color:#FFF; font-size:1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
                         Nutri-Score 공식 등급: <span id="nutriScoreLetter"
@@ -460,30 +457,39 @@
                     </div>
                 </div>
 
-                <!-- 영국식 신호등 (Traffic Light) 영양 표시 -->
-                <div class="health-section">
-                    <h4 class="health-title">🚦 영국식 핵심 3대 영양소 신호등 (100g)</h4>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
-                        <div style="text-align:center; padding:12px; background:#FAFAFA; border-radius:16px;">
-                            <div style="font-size:0.8rem; color:#8E8E93; font-weight:800;">당류(Sugar)</div>
-                            <div id="sugarEmoji" style="font-size:1.6rem; margin:4px 0;"></div>
-                            <div id="sugarVal" style="font-weight:900; color:#1C1C1E; font-family:'Jua', sans-serif;">
-                            </div>
-                            <div id="sugarTxt" style="font-size:0.75rem; font-weight:800; margin-top:2px;"></div>
+                <!-- K-FDA Macros -->
+                <div style="font-weight:900; margin: 20px 0 10px 0; display:flex; align-items:center; gap:8px;">
+                    <span>🇰🇷 식약처 1일 영양성분 섭취 기준 비율</span>
+                </div>
+                <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-card" style="padding: 12px 8px;">
+                        <div class="metric-title" style="margin-bottom:8px;">당류</div>
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                            <div id="sugarEmoji"
+                                style="font-size:1.8rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">⚪</div>
+                            <div id="sugarVal"
+                                style="font-weight:900; font-size:0.95rem; color:#1C1C1E; margin-top:2px;">-</div>
+                            <div id="sugarTxt" style="font-size:0.75rem; font-weight:800;">-</div>
                         </div>
-                        <div style="text-align:center; padding:12px; background:#FAFAFA; border-radius:16px;">
-                            <div style="font-size:0.8rem; color:#8E8E93; font-weight:800;">지방(Fat)</div>
-                            <div id="fatEmoji" style="font-size:1.6rem; margin:4px 0;"></div>
-                            <div id="fatVal" style="font-weight:900; color:#1C1C1E; font-family:'Jua', sans-serif;">
-                            </div>
-                            <div id="fatTxt" style="font-size:0.75rem; font-weight:800; margin-top:2px;"></div>
+                    </div>
+                    <div class="metric-card" style="padding: 12px 8px;">
+                        <div class="metric-title" style="margin-bottom:8px;">지방</div>
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                            <div id="fatEmoji"
+                                style="font-size:1.8rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">⚪</div>
+                            <div id="fatVal" style="font-weight:900; font-size:0.95rem; color:#1C1C1E; margin-top:2px;">
+                                -</div>
+                            <div id="fatTxt" style="font-size:0.75rem; font-weight:800;">-</div>
                         </div>
-                        <div style="text-align:center; padding:12px; background:#FAFAFA; border-radius:16px;">
-                            <div style="font-size:0.8rem; color:#8E8E93; font-weight:800;">나트륨(Na)</div>
-                            <div id="sodiumEmoji" style="font-size:1.6rem; margin:4px 0;"></div>
-                            <div id="sodiumVal" style="font-weight:900; color:#1C1C1E; font-family:'Jua', sans-serif;">
-                            </div>
-                            <div id="sodiumTxt" style="font-size:0.75rem; font-weight:800; margin-top:2px;"></div>
+                    </div>
+                    <div class="metric-card" style="padding: 12px 8px;">
+                        <div class="metric-title" style="margin-bottom:8px;">나트륨</div>
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                            <div id="sodiumEmoji"
+                                style="font-size:1.8rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">⚪</div>
+                            <div id="sodiumVal"
+                                style="font-weight:900; font-size:0.95rem; color:#1C1C1E; margin-top:2px;">-</div>
+                            <div id="sodiumTxt" style="font-size:0.75rem; font-weight:800;">-</div>
                         </div>
                     </div>
                 </div>
@@ -575,7 +581,7 @@
 
                 loadingEl.style.display = 'none';
                 renderResult(productData, priceData);
-            } catch (e) { loadingEl.style.display = 'none'; alert('서버 통신 오류가 발생했습니다.'); }
+            } catch (e) { console.error(e); loadingEl.style.display = 'none'; alert('서버 통신 오류가 발생했습니다: ' + e.message); }
         }
 
         function populateList(elementId, items, className) {
