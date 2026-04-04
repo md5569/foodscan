@@ -206,12 +206,12 @@
         const recommendList = document.getElementById('recommendList');
 
         async function fetchProduct(barcode) {
-            const res = await fetch(`/api/scan?barcode=${barcode}`);
+            const res = await fetch(`/api/scan.js?barcode=${barcode}`);
             return await res.json();
         }
         async function fetchPrice(barcode) {
             // Placeholder – replace with real endpoint if available
-            const res = await fetch(`/api/price?barcode=${barcode}`);
+           const res = await fetch(`/api/price.js?barcode=${barcode}`);
             if (!res.ok) return null;
             return await res.json();
         }
