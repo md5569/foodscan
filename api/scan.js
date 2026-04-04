@@ -26,7 +26,12 @@ module.exports = async (req, res) => {
 
             if ((!ingredients || ingredients.length < 5) || (!kcal100 && !kcalServing)) {
                 try {
-                    const scrapeRes = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(fullName + ' 영양성분 칼로리 원재료명')}`);
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5초 이상 지연 시 강제 취소 (서버 뻗음 방지)
+
+                    const scrapeRes = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(fullName + ' 영양성분 칼로리 원재료명')}`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+
                     const html = await scrapeRes.text();
                     const plainText = html.replace(/<[^>]*>?/gm, ' ');
 
