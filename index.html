@@ -413,6 +413,8 @@
                         id="originText" style="color: #3A3A3C;"></span></div>
                 <h3 class="product-title" id="productName"></h3>
                 <img id="productImg" class="product-img" src="" alt="제품 사진" style="display: none;" />
+                <div id="secondaryImgs"
+                    style="display: flex; gap: 10px; margin-top: 10px; justify-content: center; flex-wrap: wrap;"></div>
 
                 <!-- 인증 마크 (Certification Badges) -->
                 <div id="certificationContainer"
@@ -607,6 +609,11 @@
             document.getElementById('productName').textContent = data.productName;
             const img = document.getElementById('productImg');
             if (data.image) { img.src = data.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
+
+            const secImgs = document.getElementById('secondaryImgs');
+            secImgs.innerHTML = '';
+            if (data.imageNutrition) secImgs.innerHTML += `<img src="${data.imageNutrition}" style="width: 48%; border-radius: 12px; border: 2px solid #34C759; object-fit: cover;" alt="영양성분 표시">`;
+            if (data.imageIngredients) secImgs.innerHTML += `<img src="${data.imageIngredients}" style="width: 48%; border-radius: 12px; border: 2px solid #FF9500; object-fit: cover;" alt="원재료명 표시">`;
 
             const certCont = document.getElementById('certificationContainer');
             certCont.innerHTML = '';
