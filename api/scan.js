@@ -142,11 +142,11 @@ module.exports = async (req, res) => {
             // 타겟 맞춤형 질환 경고 모델
             const targetWarnings = [];
             const isHighSugar = sugars > 15;
-            const hasBadSweeteners = warningKeywords.some(word => ingredients.includes(word) && ["비만", "혈당", "당", "상승"].some(w => warningDict[word].includes(w)));
+            const hasBadSweeteners = warningKeywords.some(word => ingredients.includes(word) && ["비만", "혈당", "당", "상승"].some(w => warningDict[word].risk.includes(w)));
             if (isHighSugar || hasBadSweeteners) targetWarnings.push("🩸 당뇨/혈당 스파이크 경고 (당류 과다 또는 혈당 교란 감미료 발견)");
             if (sodium > 600) targetWarnings.push("🫀 심혈관/고혈압 주의 (1일 권장 나트륨 30% 이상 초과 위험 수준)");
 
-            const hasBadChemicals = warningKeywords.some(word => ingredients.includes(word) && ["발암", "ADHD", "벤젠", "색소"].some(w => warningDict[word].includes(w)));
+            const hasBadChemicals = warningKeywords.some(word => ingredients.includes(word) && ["발암", "ADHD", "벤젠", "색소"].some(w => warningDict[word].risk.includes(w)));
             if (hasBadChemicals || ingredients.includes('카페인') || ingredients.includes('caffeine')) {
                 targetWarnings.push("👶 영유아/임산부 섭취 강력 제한 요망 (발암/타르색소/보존료/카페인 발견)");
             }
