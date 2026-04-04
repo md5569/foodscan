@@ -24,7 +24,12 @@ module.exports = async (req, res) => {
             let kcal100 = p.nutriments && p.nutriments['energy-kcal_100g'] ? Math.round(p.nutriments['energy-kcal_100g']) : null;
             let kcalServing = p.nutriments && p.nutriments['energy-kcal_serving'] ? Math.round(p.nutriments['energy-kcal_serving']) : null;
 
-            if ((!ingredients || ingredients.length < 5) || (!kcal100 && !kcalServing)) {
+            const getNutri = (key) => (p.nutriments && p.nutriments[key] !== undefined) ? p.nutriments[key] : null;
+            let fat = getNutri('fat_100g');
+            let sugars = getNutri('sugars_100g');
+            let sodium = getNutri('sodium_100g') !== null ? getNutri('sodium_100g') * 1000 : null; // g -> mg
+
+            if ((!ingredients || ingredients.length < 5) || (!kcal100 && !kcalServing) || (fat === null && sugars === null && sodium === null)) {
                 try {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5초 이상 지연 시 강제 취소 (서버 뻗음 방지)
@@ -34,6 +39,21 @@ module.exports = async (req, res) => {
 
                     const html = await scrapeRes.text();
                     const plainText = html.replace(/<[^>]*>?/gm, ' ');
+
+                    const extract = (regex) => { const m = plainText.match(regex); return m ? m[1] : null; };
+
+                    if (sugars === null) {
+                        const s = extract(/당류\s*(\d+(?:\.\d+)?)\s*g/i);
+                        if (s) { sugars = parseFloat(s); isScraped = true; }
+                    }
+                    if (fat === null) {
+                        const f = extract(/지방\s*(\d+(?:\.\d+)?)\s*g/i);
+                        if (f) { fat = parseFloat(f); isScraped = true; }
+                    }
+                    if (sodium === null) {
+                        const nMatch = extract(/나트륨\s*([\d,]+(?:\.\d+)?)\s*mg/i);
+                        if (nMatch) { sodium = parseFloat(nMatch.replace(/,/g, '')); isScraped = true; }
+                    }
 
                     if (!ingredients || ingredients.length < 5) {
                         ingredients = plainText;
@@ -54,12 +74,21 @@ module.exports = async (req, res) => {
             if (p.origins) {
                 originText = p.origins;
             } else {
-                const originMatch = ingredients.match(/([가-힣]+산)(?=[,\s\)])/g);
+                // 내돈내산 등 나이즈 오탐지 방지를 위한 유효 국명 화이트리스트 필터
+                const validOrigins = ["국산", "국내산", "미국산", "호주산", "태국산", "중국산", "프랑스산", "스페인산", "뉴질랜드산", "칠레산", "브라질산", "독일산", "이탈리아산", "베트남산", "인도산", "캐나다산", "러시아산", "필리핀산", "말레이시아산"];
+                const originMatch = ingredients.match(/([가-힣]+산)/g);
                 if (originMatch) {
-                    originText = [...new Set(originMatch)].join(', ');
-                } else {
-                    const originKeyword = ingredients.match(/원산지\s*[:]\s*([가-힣\s,]+)/);
-                    if (originKeyword) originText = originKeyword[1].trim();
+                    const filtered = originMatch.filter(o => validOrigins.includes(o));
+                    if (filtered.length > 0) {
+                        originText = filtered[0]; // 제조사 DB 한계를 대체하기 위해 최상단 핵심 원산지 1곳 확정 채택
+                    }
+                }
+
+                if (originText === "표기 없음 (제품 라벨 참조)") {
+                    const originKeyword = ingredients.match(/원산지\s*[:]\s*([가-힣]+)/);
+                    if (originKeyword && validOrigins.includes(originKeyword[1])) {
+                        originText = originKeyword[1];
+                    }
                 }
             }
 
@@ -115,12 +144,7 @@ module.exports = async (req, res) => {
                 } else caloriesText = `100g당 ${kcal100}kcal`;
             } else if (kcalServing) caloriesText = `총(1회) 제공량: ${kcalServing}kcal`;
 
-            // 영양소 및 🇰🇷 식약처 1일 권장량 비율 기준 (K-FDA)
-            const getNutri = (key) => (p.nutriments && p.nutriments[key] !== undefined) ? p.nutriments[key] : null;
-            const fat = getNutri('fat_100g');
-            const sugars = getNutri('sugars_100g');
-            const sodium = getNutri('sodium_100g') !== null ? getNutri('sodium_100g') * 1000 : null; // g -> mg
-
+            // 영양소 및 🇰🇷 식약처 1일 권장량 비율 기준 산출 (K-FDA)
             const kfdaPercent = (val, dailyLimit, name) => {
                 if (val === null) return { value: '?', level: 'unknown', text: '정보 없음', emoji: '⚪' };
                 const percent = Math.round((val / dailyLimit) * 100);
