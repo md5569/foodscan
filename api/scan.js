@@ -20,18 +20,28 @@ module.exports = async (req, res) => {
             let ingredients = (p.ingredients_text_ko || p.ingredients_text || "").toLowerCase();
             let isScraped = false;
 
-            // [해결책 B] 국내 상품 원재료 데이터가 빈약할 경우, 네이버 웹 통합 검색으로 고속 크롤링
-            if (!ingredients || ingredients.length < 5) {
+            // [해결책 B] 원재료명 또는 칼로리가 비어있을 경우, 네이버 웹 검색으로 고속 스크래핑
+            let kcal100 = p.nutriments && p.nutriments['energy-kcal_100g'] ? Math.round(p.nutriments['energy-kcal_100g']) : null;
+            let kcalServing = p.nutriments && p.nutriments['energy-kcal_serving'] ? Math.round(p.nutriments['energy-kcal_serving']) : null;
+
+            if ((!ingredients || ingredients.length < 5) || (!kcal100 && !kcalServing)) {
                 try {
-                    // "상품명 + 원재료명" 을 검색하여 스니펫의 텍스트 덩어리를 긁어옴
-                    const scrapeRes = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(fullName + ' 원재료명')}`);
+                    const scrapeRes = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(fullName + ' 영양성분 칼로리 원재료명')}`);
                     const html = await scrapeRes.text();
-                    const plainText = html.replace(/<[^>]*>?/gm, ' '); // 정규식으로 HTML 태그 싹 날리기
-                    ingredients = plainText; // 긁어온 엄청난 양의 텍스트에 유해 성분 키워드가 걸리는지 판독
-                    isScraped = true;
-                } catch (e) {
-                    console.log("Scraping fallback failed");
-                }
+                    const plainText = html.replace(/<[^>]*>?/gm, ' ');
+
+                    if (!ingredients || ingredients.length < 5) {
+                        ingredients = plainText;
+                        isScraped = true;
+                    }
+                    if (!kcal100 && !kcalServing) {
+                        const kcalMatch = plainText.match(/(\d{2,4})\s*(kcal|칼로리)/i);
+                        if (kcalMatch) {
+                            kcalServing = parseInt(kcalMatch[1]);
+                            isScraped = true;
+                        }
+                    }
+                } catch (e) { console.log("Scraping fallback failed"); }
             }
 
             // 유해 성분 매핑 (강력한 필터링)
@@ -69,40 +79,38 @@ module.exports = async (req, res) => {
 
             const score = Math.max(10, baseScore); // 최저 방어선 10점
 
-            // 칼로리 로직
-            const kcal100 = p.nutriments && p.nutriments['energy-kcal_100g'] ? Math.round(p.nutriments['energy-kcal_100g']) : null;
-            const kcalServing = p.nutriments && p.nutriments['energy-kcal_serving'] ? Math.round(p.nutriments['energy-kcal_serving']) : null;
-            let caloriesText = "비공개";
-            if (kcal100 && kcalServing) caloriesText = `100g당 ${kcal100}kcal \n(1회 제공량: ${kcalServing}kcal)`;
+            // 칼로리 로직 (스크래핑 연동)
+            let caloriesText = "열량 정보 없음 (비공개)";
+            if (kcal100 && kcalServing) caloriesText = `100g당 ${kcal100}kcal \n(1회/총 제공량: ${kcalServing}kcal)`;
             else if (kcal100) {
                 const qtyMatch = p.quantity ? String(p.quantity).match(/(\d+)\s*(g|ml)/i) : null;
                 if (qtyMatch) {
                     caloriesText = `100g당 ${kcal100}kcal \n(총 내용량 ${qtyMatch[1]}${qtyMatch[2].toLowerCase()}: ${Math.round(kcal100 * (parseInt(qtyMatch[1]) / 100))}kcal)`;
                 } else caloriesText = `100g당 ${kcal100}kcal`;
-            } else if (kcalServing) caloriesText = `1회 제공량 ${kcalServing}kcal`;
+            } else if (kcalServing) caloriesText = `총(1회) 제공량: ${kcalServing}kcal`;
 
-            // 영양소 및 신호등 로직 (UK FSA 기반)
+            // 영양소 및 🇰🇷 식약처 1일 권장량 비율 기준 (K-FDA)
             const getNutri = (key) => (p.nutriments && p.nutriments[key] !== undefined) ? p.nutriments[key] : null;
-            const carbs = getNutri('carbohydrates_100g');
-            const proteins = getNutri('proteins_100g');
             const fat = getNutri('fat_100g');
             const sugars = getNutri('sugars_100g');
-            const sodium = getNutri('sodium_100g');
+            const sodium = getNutri('sodium_100g') !== null ? getNutri('sodium_100g') * 1000 : null; // g -> mg
 
-            const trafficLight = (val, thRed, thAmber, name, unit = 'g') => {
+            const kfdaPercent = (val, dailyLimit, name) => {
                 if (val === null) return { value: '?', level: 'unknown', text: '정보 없음', emoji: '⚪' };
-                let lvl = 'green', txt = '안전 수준', emj = '🟢';
-                if (val > thRed) { lvl = 'red'; txt = '위험 수준'; emj = '🔴'; }
-                else if (val > thAmber) { lvl = 'amber'; txt = '경고 수준'; emj = '🟡'; }
-                return { value: `${Math.round(val * 10) / 10}${unit}`, level: lvl, text: txt, emoji: emj };
+                const percent = Math.round((val / dailyLimit) * 100);
+
+                let lvl = 'green', txt = `안전 (${percent}%)`, emj = '🟢';
+                if (percent >= 30) { lvl = 'red'; txt = `위험 (${percent}%)`, emj = '🔴'; } // 100g당 하루치 30% 넘으면 위험
+                else if (percent >= 15) { lvl = 'amber'; txt = `주의 (${percent}%)`, emj = '🟡'; }
+
+                let displayVal = name === '나트륨' ? `${Math.round(val)}mg` : `${Math.round(val * 10) / 10}g`;
+                return { value: displayVal, level: lvl, text: txt, emoji: emj };
             };
 
             const macros = {
-                carbs: carbs !== null ? `${Math.round(carbs)}g` : '?',
-                proteins: proteins !== null ? `${Math.round(proteins)}g` : '?',
-                fat: trafficLight(fat, 20, 3, '지방'),
-                sugars: trafficLight(sugars, 22.5, 5, '당류'),
-                sodium: trafficLight(sodium, 0.6, 0.12, '나트륨') // 0.6g Na = 1.5g Salt
+                fat: kfdaPercent(fat, 54, '지방'),
+                sugars: kfdaPercent(sugars, 100, '당류'),
+                sodium: kfdaPercent(sodium, 2000, '나트륨')
             };
 
             // 타겟 맞춤형 질환 경고 모델
@@ -110,8 +118,7 @@ module.exports = async (req, res) => {
             const isHighSugar = sugars > 15;
             const hasBadSweeteners = warningKeywords.some(word => ingredients.includes(word) && ["비만", "혈당", "당", "상승"].some(w => warningDict[word].includes(w)));
             if (isHighSugar || hasBadSweeteners) targetWarnings.push("🩸 당뇨/혈당 스파이크 경고 (당류 과다 또는 혈당 교란 감미료 발견)");
-
-            if (sodium > 0.6) targetWarnings.push("🫀 심혈관/고혈압 주의 (1일 권장 나트륨 초과 위험 수준)");
+            if (sodium > 600) targetWarnings.push("🫀 심혈관/고혈압 주의 (1일 권장 나트륨 30% 이상 초과 위험 수준)");
 
             const hasBadChemicals = warningKeywords.some(word => ingredients.includes(word) && ["발암", "ADHD", "벤젠", "색소"].some(w => warningDict[word].includes(w)));
             if (hasBadChemicals || ingredients.includes('카페인') || ingredients.includes('caffeine')) {
@@ -150,21 +157,6 @@ module.exports = async (req, res) => {
                 if (rawAllergens.trim() !== '') translatedAllergens = rawAllergens.split(',').map(s => s.trim());
             }
 
-            let frequencyGuide = "";
-            if (score >= 80) frequencyGuide = "전 세계 영양학 기준 상위 등급! 매일 식단에 포함시켜도 안심할 수 있는 건강한 성분입니다. 👨‍⚕️🟢";
-            else if (score >= 60) frequencyGuide = "보통 수준의 가공식품입니다. 화학 첨가물이 일부 포함되어 있으므로 **주 2~3회 이내**로 조절해 드시는 것을 권장합니다. 🟡";
-            else if (score >= 40) frequencyGuide = "주의! 화학 첨가물이나 유해 성분이 여럿 관찰되었습니다. 가급적 **주 1회 이하**의 특식으로만 양보하세요. 🟠";
-            else frequencyGuide = "경고! WHO 기준 체내 염증을 유발할 수 있는 다량의 화학성분(발색제, 감미료 등)이 포함되어 있습니다. 강력히 **월 1~2회 미만** 섭취를 안내합니다. 🔴";
-
-            let fallbackName = (rawProductName + " " + ingredients).toLowerCase();
-            let alternative = null;
-            if (fallbackName.includes('콜라') || fallbackName.includes('음료')) alternative = { keyword: "제로 콤부차", text: "설탕 덩어리 음료 대신 유산균이 풍부한 '무가당 콤부차'나 '탄산수'는 어떠세요?" };
-            else if (fallbackName.includes('라면') || fallbackName.includes('noodle')) alternative = { keyword: "건면 라면", text: "기름에 튀긴 면 대신 트랜스지방을 뺀 '건면'을 추천합니다!" };
-            else if (fallbackName.includes('과자') || fallbackName.includes('snack')) alternative = { keyword: "통밀 크래커", text: "화학조미료 범벅 과자 대신 식이섬유가 풍부한 '통밀 크래커'가 좋습니다!" };
-            else if (fallbackName.includes('소시지') || fallbackName.includes('햄')) alternative = { keyword: "무항생제 무첨가 햄", text: "발암물질(아질산나트륨)이 없는 '무첨가 햄'이 최소한 안전합니다!" };
-            else if (fallbackName.includes('아이스크림')) alternative = { keyword: "저칼로리 아이스크림", text: "당류가 폭발하는 일반 아이스크림 대신 '알룰로스 아이스크림'을 시도해보세요!" };
-            else if (score < 70) alternative = { keyword: "유기농 과자", text: "화학 첨가물이 너무 많아요! '자연식품/유기농'으로 교체하는 것은 어떨까요?" };
-
             res.status(200).json({
                 success: true, productName: rawProductName, brand: brandInfo, fullName: fullName,
                 nutriGrade: p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : null,
@@ -173,8 +165,7 @@ module.exports = async (req, res) => {
                 badIngredients: uniqueBad.length > 0 ? uniqueBad : (additives.length > 0 ? ["가벼운 첨가물이 일부 구성(안전범위)"] : ["깨끗한 친환경 원료 👍"]),
                 score: score, scoreBreakdown: scoreBreakdown, isScraped: isScraped,
                 allergens: translatedAllergens,
-                image: p.image_front_url || p.image_url || p.image_front_small_url || "",
-                guide: frequencyGuide, alternative: alternative
+                image: p.image_front_url || p.image_url || p.image_front_small_url || ""
             });
         } else {
             res.status(200).json({ success: false, message: "Product not found" });
