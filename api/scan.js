@@ -49,22 +49,43 @@ module.exports = async (req, res) => {
                 } catch (e) { console.log("Scraping fallback failed"); }
             }
 
-            // 유해 성분 매핑 (강력한 필터링)
+            // 원산지(Origin) 추출 로직
+            let originText = "표기 없음 (제품 라벨 참조)";
+            if (p.origins) {
+                originText = p.origins;
+            } else {
+                const originMatch = ingredients.match(/([가-힣]+산)(?=[,\s\)])/g);
+                if (originMatch) {
+                    originText = [...new Set(originMatch)].join(', ');
+                } else {
+                    const originKeyword = ingredients.match(/원산지\s*[:]\s*([가-힣\s,]+)/);
+                    if (originKeyword) originText = originKeyword[1].trim();
+                }
+            }
+
+            // 유해 성분 매핑 (강력한 필터링 및 이름/위험성 분리)
             const warningDict = {
-                "설탕": "설탕 (비만 및 간 손상 위험 ⚠️)", "sugar": "설탕 (혈당 급상승 ⚠️)",
-                "과당": "액상과당 (혈당을 급격히 올려 비만 유발 ⚠️)", "물엿": "물엿 (혈당 급상승 ⚠️)",
-                "수크랄로스": "수크랄로스 (인공 감미료: 장내 유익균 파괴/혈당 교란 우려 ⚠️)", "sucralose": "수크랄로스 (인공 감미료 ⚠️)",
-                "아스파탐": "아스파탐 (인공 감미료: 발암가능 및 두통 주의 ⚠️)", "aspartame": "아스파탐 (인공 감미료 ⚠️)",
-                "사카린": "사카린 나트륨 (인공 감미료: 장기 섭취 시 소화기 부작용 우려 ⚠️)", "아세설팜칼륨": "아세설팜칼륨 (인공 감미료: 갑상선 영향 우려 ⚠️)", "acesulfame k": "아세설팜칼륨 (갑상선 주의 ⚠️)",
-                "팜유": "팜유 (포화지방 다중 함유, 심혈관 압박 ⚠️)", "palm oil": "팜유 (콜레스테롤 상승 ⚠️)", "마가린": "마가린 (트랜스지방 ⚠️)",
-                "소르빈산": "소르빈산염 (합성 보존료: 피부 점막 자극 ⚠️)", "아질산나트륨": "아질산나트륨 (햄 발색제: 1급 발암물질 생성 위험 🔴)", "안식향산나트륨": "안식향산나트륨 (보존료: 벤젠 생성 🔴)",
-                "글루탐산나트륨": "L-글루탐산나트륨 (MSG: 민감한 사람에게 두통/메스꺼움 ⚠️)", "msg": "MSG (민감 체질 유발 가능 ⚠️)",
-                "합성향료": "합성향료 (미확인 알레르기 유의 ⚠️)", "타르색소": "타르색소 (인공 착색료: 주의력 결핍(ADHD) 증상 유발 의심 🔴)", "적색40호": "적색40호 (인공 색소: 과잉행동장애 의심 🔴)", "황색4호": "황색4호 (천식 알레르기 의심 🔴)"
+                "설탕": { name: "설탕", risk: "과다 섭취 시 만성 염증, 비만 및 간 손상 위험 ⚠️" }, "sugar": { name: "설탕", risk: "혈당 급상승 및 대사 증후군 유발 ⚠️" },
+                "과당": { name: "액상과당 (콘시럽)", risk: "설탕보다 흡수가 빨라 체지방(지방간) 축적의 주범 🔴" }, "물엿": { name: "물엿/단당류", risk: "혈당 급상승 ⚠️" },
+                "수크랄로스": { name: "수크랄로스", risk: "인공 감미료: 장내 유익균 파괴, 인슐린 저항성 악화 우려 🔴" }, "sucralose": { name: "수크랄로스", risk: "인공 감미료 🔴" },
+                "아스파탐": { name: "아스파탐", risk: "인공 감미료: WHO 발암가능물질 지정, 신경계 교란 및 두통 주의 🔴" }, "aspartame": { name: "아스파탐", risk: "인공 감미료 🔴" },
+                "사카린": { name: "사카린나트륨", risk: "인공 감미료: 장기 섭취 시 소화기 부작용 우려 ⚠️" }, "아세설팜칼륨": { name: "아세설팜칼륨", risk: "인공 감미료: 갑상선 기능 영향 우려 ⚠️" }, "acesulfame k": { name: "아세설팜칼륨", risk: "인공 감미료 ⚠️" },
+                "팜유": { name: "팜유", risk: "저가 정제유: 포화지방이 과다해 나쁜 콜레스테롤(LDL) 상승 압박 ⚠️" }, "palm oil": { name: "팜유", risk: "포화지방 과다 ⚠️" }, "마가린": { name: "마가린", risk: "트랜스지방 함유로 혈관 벽 손상 🔴" },
+                "소르빈산": { name: "소르빈산염", risk: "보존료(방부제): 피부 점막 자극 및 알레르기 유발 우려 ⚠️" }, "아질산나트륨": { name: "아질산나트륨", risk: "발색제(육가공품): 고기와 결합 시 1급 발암물질(니트로사민) 생성 🔴" }, "안식향산나트륨": { name: "안식향산나트륨", risk: "보존료: 비타민C와 결합 시 1급 발암물질 '벤젠' 생성 위험 🔴" },
+                "글루탐산나트륨": { name: "L-글루탐산나트륨 (MSG)", risk: "향미증진제: 일부 민감한 사람에게 두통, 메스꺼움, 피부 발진 유발 ⚠️" }, "msg": { name: "MSG", risk: "민감 체질 부작용 우려 ⚠️" },
+                "합성향료": { name: "합성향료", risk: "미확인 화학물질 배합: 원인 모를 알레르기나 두통 원인 ⚠️" }, "타르색소": { name: "타르색소", risk: "인공 착색료: 아이들 주의력 결핍(ADHD) 및 정서 불안 촉발 의심 🔴" }, "적색40호": { name: "적색40호", risk: "인공 색소: 과잉행동장애 의심 🔴" }, "황색4호": { name: "황색4호", risk: "인공 색소: 천식 알레르기 의심 🔴" }
             };
 
             const warningKeywords = Object.keys(warningDict);
-            const detectedBad = warningKeywords.filter(word => ingredients.includes(word)).map(word => warningDict[word]);
-            const uniqueBad = [...new Set(detectedBad)];
+            const detectedBadObjs = [];
+            warningKeywords.forEach(word => {
+                if (ingredients.includes(word)) {
+                    if (!detectedBadObjs.some(obj => obj.name === warningDict[word].name)) {
+                        detectedBadObjs.push(warningDict[word]);
+                    }
+                }
+            });
+            const uniqueBadCount = detectedBadObjs.length;
 
             // 점수 산정 투명화 로직 (Score Breakdown)
             let baseScore = 100;
@@ -76,9 +97,9 @@ module.exports = async (req, res) => {
                 baseScore -= addPenalty;
             }
 
-            if (uniqueBad.length > 0) {
-                const toxicPenalty = uniqueBad.length * 10;
-                scoreBreakdown.push(`핵심 유해/주의성분 ${uniqueBad.length}개 발견 (-${toxicPenalty}점)`);
+            if (uniqueBadCount > 0) {
+                const toxicPenalty = uniqueBadCount * 10;
+                scoreBreakdown.push(`핵심 유해/주의성분 ${uniqueBadCount}개 발견 (-${toxicPenalty}점)`);
                 baseScore -= toxicPenalty;
             }
 
@@ -133,7 +154,7 @@ module.exports = async (req, res) => {
             let greenwashingAlert = null;
             const fakeKeywords = ["제로", "zero", "라이트", "light", "무가당", "슈가프리", "슈거프리", "천연", "내추럴", "내츄럴", "natural"];
             const isMarketingFake = fakeKeywords.some(kw => fullName.toLowerCase().includes(kw));
-            if (isMarketingFake && uniqueBad.length > 0) {
+            if (isMarketingFake && uniqueBadCount > 0) {
                 greenwashingAlert = "🚨 [그린워싱 주의] 무늬만 건강식품! 마케팅은 '제로/천연'을 표방하나, 실제로는 유해 감미료나 화학제가 다량 발견되었습니다.";
             }
 
@@ -167,8 +188,9 @@ module.exports = async (req, res) => {
                 nutriGrade: p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : null,
                 calories: caloriesText, nova: nova, macros: macros, targetWarnings: targetWarnings,
                 greenwashingAlert: greenwashingAlert, certifications: certifications,
-                badIngredients: uniqueBad.length > 0 ? uniqueBad : (additives.length > 0 ? ["가벼운 첨가물이 일부 구성(안전범위)"] : ["깨끗한 친환경 원료 👍"]),
+                badIngredients: uniqueBadCount > 0 ? detectedBadObjs : (additives.length > 0 ? [{ name: '가벼운 첨가물 일부 포함', risk: '적정 섭취 시 안전' }] : [{ name: '친환경 원물', risk: '매우 안전 👍' }]),
                 score: score, scoreBreakdown: scoreBreakdown, isScraped: isScraped,
+                origin: originText,
                 allergens: translatedAllergens,
                 image: p.image_front_url || p.image_url || p.image_front_small_url || ""
             });
