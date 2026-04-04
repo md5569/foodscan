@@ -587,13 +587,14 @@
 
             // UK Traffic Light Macros
             if (data.macros) {
-                const mapMacro = (key) => {
-                    document.getElementById(key + 'Emoji').textContent = data.macros[key].emoji;
-                    document.getElementById(key + 'Val').textContent = data.macros[key].value;
-                    document.getElementById(key + 'Txt').textContent = data.macros[key].text;
-                    document.getElementById(key + 'Txt').style.color = data.macros[key].level === 'red' ? '#FF3B30' : (data.macros[key].level === 'amber' ? '#FF9500' : '#34C759');
+                const mapMacro = (htmlKey, dataKey) => {
+                    if (!data.macros[dataKey]) return;
+                    document.getElementById(htmlKey + 'Emoji').textContent = data.macros[dataKey].emoji;
+                    document.getElementById(htmlKey + 'Val').textContent = data.macros[dataKey].value;
+                    document.getElementById(htmlKey + 'Txt').textContent = data.macros[dataKey].text;
+                    document.getElementById(htmlKey + 'Txt').style.color = data.macros[dataKey].level === 'red' ? '#FF3B30' : (data.macros[dataKey].level === 'amber' ? '#FF9500' : '#34C759');
                 };
-                mapMacro('sugar'); mapMacro('fat'); mapMacro('sodium');
+                mapMacro('sugar', 'sugars'); mapMacro('fat', 'fat'); mapMacro('sodium', 'sodium');
             }
 
             document.getElementById('nova').textContent = data.nova || '미분류';
