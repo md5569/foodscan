@@ -32,13 +32,28 @@ module.exports = async (req, res) => {
             if ((!ingredients || ingredients.length < 5) || (!kcal100 && !kcalServing) || (fat === null && sugars === null && sodium === null)) {
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5초 이상 지연 시 강제 취소 (서버 뻗음 방지)
+                    const timeoutId = setTimeout(() => controller.abort(), 2500);
 
-                    const scrapeRes = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(fullName + ' 영양성분 칼로리 원재료명')}`, { signal: controller.signal });
+                    // 바코드를 검색 쿼리에 강제 주입하여 영문표기(Dongwon Just 등)로 인한 한국어 검색 노이즈 완벽 차단
+                    const searchQuery = barcode ? `${barcode} ${fullName} 영양성분 원산지 원재료명` : `${fullName} 영양성분 원산지 원재료명`;
+                    const scrapeRes = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(searchQuery)}`, { signal: controller.signal });
                     clearTimeout(timeoutId);
 
-                    const html = await scrapeRes.text();
-                    const plainText = html.replace(/<[^>]*>?/gm, ' ');
+                    let html = await scrapeRes.text();
+                    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+                    let plainText = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ');
+
+                    // 핵심 컨텍스트 클리핑: 검색결과 전체가 아닌, '상품명' 주변만 추출
+                    const nameParts = fullName.split(' ');
+                    const keyPart = nameParts.length > 1 ? nameParts[1] : nameParts[0];
+                    let keywordIdx = plainText.indexOf(keyPart);
+                    if (keywordIdx === -1 && barcode) keywordIdx = plainText.indexOf(String(barcode));
+
+                    if (keywordIdx !== -1) {
+                        plainText = plainText.substring(Math.max(0, keywordIdx - 100), keywordIdx + 600);
+                    } else {
+                        plainText = plainText.substring(0, 1500); // 텍스트 매칭 실패 시 최상단 블로그/쇼핑 스니펫 확보를 위해 넓게 자름
+                    }
 
                     const extract = (regex) => { const m = plainText.match(regex); return m ? m[1] : null; };
 
@@ -183,7 +198,9 @@ module.exports = async (req, res) => {
             }
 
             const certifications = [];
-            const allTextForCert = (fullName + ingredients + (p.labels_tags || []).join(' ')).toLowerCase();
+            // 네이버 검색에서 긁어온 텍스트는 신뢰도가 낮으므로 유기농/HACCP 인증 검사에서 원천 제외
+            const certTargetText = isScraped ? "" : ingredients;
+            const allTextForCert = (fullName + certTargetText + (p.labels_tags || []).join(' ')).toLowerCase();
             if (allTextForCert.includes('haccp') || allTextForCert.includes('해썹')) certifications.push("식약처 HACCP 시스템 인증");
             if (allTextForCert.includes('유기농') || allTextForCert.includes('organic')) certifications.push("유기농(Organic) 인증 🌱");
             if (allTextForCert.includes('무항생제') || allTextForCert.includes('무농약')) certifications.push("무농약/무항생제 검증 🌿");
