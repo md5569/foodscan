@@ -17,10 +17,14 @@ module.exports = async (req, res) => {
             let score = 100 - (additives.length * 5) - (detectedBad.length * 7);
             score = Math.max(10, score);
 
-            const brandInfo = p.brands || "알 수 없는 브랜드";
-            const nutriGrade = p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : "평가 안됨";
+            const brandInfo = p.brands || "브랜드 미상";
+            const nutriGrade = p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : "미평가";
 
-            // 알레르기 영문-한글 번역 매핑
+            // New Pro Metrics
+            const calories = (p.nutriments && p.nutriments['energy-kcal_100g']) ? `${Math.round(p.nutriments['energy-kcal_100g'])} kcal` : "정보 없음";
+            const nova = p.nova_group ? `NOVA ${p.nova_group}` : "미정";
+            const ecoscore = p.ecoscore_grade ? p.ecoscore_grade.toUpperCase() : "미평가";
+
             const allergenDict = {
                 "milk": "우유", "soybeans": "대두", "wheat": "밀", "eggs": "달걀", "peanuts": "땅콩", "fish": "생선", "crustaceans": "갑각류",
                 "tree nuts": "견과류", "mustard": "머스타드", "sesame": "참깨", "sulphites": "아황산염", "lupin": "루핀", "molluscs": "연체동물",
@@ -32,7 +36,7 @@ module.exports = async (req, res) => {
             if (p.allergens_tags && p.allergens_tags.length > 0) {
                 translatedAllergens = p.allergens_tags.map(tag => {
                     const cleanTag = tag.replace(/en:|fr:|ko:/g, '').toLowerCase();
-                    return allergenDict[cleanTag] || cleanTag; // 사전에 없으면 영문 그대로 표기
+                    return allergenDict[cleanTag] || cleanTag;
                 }).join(', ');
             } else if (p.allergens_from_ingredients) {
                 let rawAllergens = p.allergens_from_ingredients.replace(/en:/g, '').toLowerCase();
@@ -44,10 +48,13 @@ module.exports = async (req, res) => {
 
             res.status(200).json({
                 success: true,
-                productName: p.product_name_ko || p.product_name || "미등록 상품 (DB 없음)",
+                productName: p.product_name_ko || p.product_name || "미등록 상품",
                 brand: brandInfo,
                 nutriscore: nutriGrade,
-                badIngredients: detectedBad.length > 0 ? detectedBad : (additives.length > 0 ? ["첨가물 주의"] : ["건강한 식품입니다 유해성분 없음"]),
+                calories: calories,
+                nova: nova,
+                ecoscore: ecoscore,
+                badIngredients: detectedBad.length > 0 ? detectedBad : (additives.length > 0 ? ["첨가물 구성"] : ["깨끗한 성분 구조 👍"]),
                 score: score,
                 allergens: translatedAllergens,
                 image: p.image_front_small_url || ""
