@@ -43,16 +43,17 @@ module.exports = async (req, res) => {
                     html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
                     let plainText = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ');
 
-                    // 핵심 컨텍스트 클리핑: 검색결과 전체가 아닌, '상품명' 주변만 추출
+                    // 핵심 컨텍스트 클리핑: 검색결과 전체가 아닌, 본문 내 '상품명' 주변만 추출
                     const nameParts = fullName.split(' ');
                     const keyPart = nameParts.length > 1 ? nameParts[1] : nameParts[0];
-                    let keywordIdx = plainText.indexOf(keyPart);
-                    if (keywordIdx === -1 && barcode) keywordIdx = plainText.indexOf(String(barcode));
+                    // HTML 헤더부(<title> 등)의 노이즈를 피하기 위해 본문이 시작되는 500번째 글자부터 탐색
+                    let keywordIdx = plainText.indexOf(keyPart, 500);
+                    if (keywordIdx === -1 && barcode) keywordIdx = plainText.indexOf(String(barcode), 500);
 
                     if (keywordIdx !== -1) {
-                        plainText = plainText.substring(Math.max(0, keywordIdx - 100), keywordIdx + 600);
+                        plainText = plainText.substring(Math.max(0, keywordIdx - 100), keywordIdx + 800);
                     } else {
-                        plainText = plainText.substring(0, 1500); // 텍스트 매칭 실패 시 최상단 블로그/쇼핑 스니펫 확보를 위해 넓게 자름
+                        plainText = plainText.substring(600, 1600); // 텍스트 매칭 실패 시 상단 메뉴바(600자)를 건너뛰고 첫 블로그/쇼핑 스니펫 확보
                     }
 
                     const extract = (regex) => { const m = plainText.match(regex); return m ? m[1] : null; };
@@ -233,7 +234,9 @@ module.exports = async (req, res) => {
                 score: score, scoreBreakdown: scoreBreakdown, isScraped: isScraped,
                 origin: originText,
                 allergens: translatedAllergens,
-                image: p.image_front_url || p.image_url || p.image_front_small_url || ""
+                image: p.image_front_url || p.image_url || p.image_front_small_url || "",
+                imageNutrition: p.image_nutrition_url || null,
+                imageIngredients: p.image_ingredients_url || null
             });
         } else {
             res.status(200).json({ success: false, message: "Product not found" });
