@@ -412,6 +412,18 @@
                 <h3 class="product-title" id="productName"></h3>
                 <img id="productImg" class="product-img" src="" alt="제품 사진" style="display: none;" />
 
+                <!-- 인증 마크 (Certification Badges) -->
+                <div id="certificationContainer"
+                    style="display:flex; justify-content:center; gap:8px; margin-bottom:15px; display:none; flex-wrap:wrap;">
+                </div>
+
+                <!-- Greenwashing Alert -->
+                <div id="greenwashingContainer"
+                    style="display:none; background: #FFF0F0; border: 2.5px solid #FF3B30; border-radius: 16px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(255, 59, 48, 0.15);">
+                    <div style="font-weight:900; color:#FF3B30; font-size:1.05rem; line-height: 1.4; word-break:keep-all;"
+                        id="greenwashingText"></div>
+                </div>
+
                 <!-- Nutri-Score (유럽 인증마크) -->
                 <div id="nutriScoreContainer" style="display:none; text-align:center; margin-bottom: 25px;">
                     <div id="nutriScoreBadge"
@@ -425,10 +437,19 @@
                 <div id="targetWarningsContainer" style="display:none; margin-bottom: 25px;">
                 </div>
 
-                <div class="metrics-grid">
-                    <div class="metric-card" style="padding: 16px 8px;">
+                <div class="metrics-grid" style="align-items:start;">
+                    <div class="metric-card" style="padding: 16px 8px; position:relative;">
                         <div class="metric-title">🛡️ 자체 안전 점수</div>
                         <div class="metric-value" id="score"></div>
+                        <div id="scoreDetailBtn"
+                            style="font-size:0.75rem; color:#007AFF; margin-top:8px; cursor:pointer; font-weight:800; text-decoration:underline;">
+                            🔍 산출 내역 보기</div>
+                        <div id="scoreBreakdownBox"
+                            style="display:none; text-align:left; background:#FFF; border:1px solid #E5E5EA; border-radius:12px; padding:12px; position:absolute; top:105%; left:0; width:180px; z-index:10; font-size:0.8rem; box-shadow:0 10px 20px rgba(0,0,0,0.1);">
+                            <div style="font-weight:800; color:#1C1C1E; margin-bottom:6px;">💯 기본점수: 100점</div>
+                            <ul id="scoreBreakdownList"
+                                style="padding-left:18px; margin:0; color:var(--danger); font-weight:700;"></ul>
+                        </div>
                     </div>
                     <div class="metric-card" style="padding: 16px 8px;">
                         <div class="metric-title">🔥 칼로리 (열량)</div>
@@ -556,6 +577,27 @@
             const img = document.getElementById('productImg');
             if (data.image) { img.src = data.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
 
+            // Certifications
+            const certCont = document.getElementById('certificationContainer');
+            certCont.innerHTML = '';
+            if (data.certifications && data.certifications.length > 0) {
+                certCont.style.display = 'flex';
+                data.certifications.forEach(cert => {
+                    const d = document.createElement('div');
+                    d.style.cssText = "background: linear-gradient(135deg, #FFD700, #FDB931); color: #B35900; padding: 6px 14px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; box-shadow: 0 4px 10px rgba(253, 185, 49, 0.3); border: 1.5px solid #E8A317;";
+                    if (cert.includes('HACCP')) d.innerHTML = '🛡️ ' + cert;
+                    else d.innerHTML = cert;
+                    certCont.appendChild(d);
+                });
+            } else { certCont.style.display = 'none'; }
+
+            // Greenwashing Alert
+            const gwCont = document.getElementById('greenwashingContainer');
+            if (data.greenwashingAlert) {
+                gwCont.style.display = 'block';
+                document.getElementById('greenwashingText').textContent = data.greenwashingAlert;
+            } else { gwCont.style.display = 'none'; }
+
             // Nutri-Score
             const scoreCont = document.getElementById('nutriScoreContainer');
             const scoreBadge = document.getElementById('nutriScoreBadge');
@@ -583,6 +625,21 @@
             // Score & Calories
             const sc = document.getElementById('score');
             sc.textContent = `${data.score}점`; sc.className = 'metric-value ' + (data.score >= 80 ? 'good' : (data.score >= 50 ? '' : 'bad'));
+
+            const sbdList = document.getElementById('scoreBreakdownList');
+            sbdList.innerHTML = '';
+            if (data.scoreBreakdown && data.scoreBreakdown.length > 0) {
+                data.scoreBreakdown.forEach(item => { const li = document.createElement('li'); li.textContent = item; sbdList.appendChild(li); });
+            } else {
+                const li = document.createElement('li'); li.textContent = '감점 요인 없음 (안전!)';
+                li.style.color = 'var(--success)'; sbdList.appendChild(li);
+            }
+
+            if (data.isScraped) {
+                document.getElementById('brandText').textContent = (data.brand || '브랜드 미등록') + ' (AI 딥서치 보완✅)';
+                document.getElementById('brandText').style.color = '#34C759';
+            }
+
             document.getElementById('calories').textContent = data.calories || '비공개';
 
             // UK Traffic Light Macros
@@ -627,6 +684,10 @@
         }
         searchBtn.addEventListener('click', () => handleSearch());
         barcodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+        document.getElementById('scoreDetailBtn').addEventListener('click', () => {
+            const box = document.getElementById('scoreBreakdownBox');
+            box.style.display = box.style.display === 'none' ? 'block' : 'none';
+        });
     </script>
 </body>
 
