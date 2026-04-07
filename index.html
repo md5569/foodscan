@@ -188,6 +188,32 @@
             object-fit: scale-down;
             display: block;
             margin: 0 auto;
+            border-radius: 16px;
+            background: #f9f9f9;
+        }
+
+        /* 이미지 탭 전환 버튼 */
+        .img-tab-group {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+            justify-content: center;
+        }
+        .img-tab-btn {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1.5px solid #E5E5EA;
+            background: #F2F2F7;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #8E8E93;
+            cursor: pointer;
+        }
+        .img-tab-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
             border-radius: 20px;
             margin-bottom: 15px;
             padding: 10px;
@@ -452,7 +478,15 @@
                 <div style="font-size: 0.85rem; color: #8E8E93; font-weight: 800; margin-bottom: 8px;">🌍 원재료 산지: <span
                         id="originText" style="color: #3A3A3C;"></span></div>
                 <h3 class="product-title" id="productName"></h3>
-                <img id="productImg" class="product-img" src="" alt="제품 사진" style="display: none;" />
+                <!-- 이미지 탭 전환 -->
+                <div class="img-tab-group" id="imgTabGroup" style="display:none;">
+                    <button class="img-tab-btn active" onclick="switchImg('front')">📦 제품</button>
+                    <button class="img-tab-btn" id="tabNutri" onclick="switchImg('nutri')" style="display:none;">🔢 영양성분표</button>
+                    <button class="img-tab-btn" id="tabIngr" onclick="switchImg('ingr')" style="display:none;">📋 원재료</button>
+                </div>
+                <img id="productImg"    class="product-img" src="" alt="제품 사진"    style="display:none;" />
+                <img id="nutriImg"      class="product-img" src="" alt="영양성분표"   style="display:none;" />
+                <img id="ingrImg"       class="product-img" src="" alt="원재료명"     style="display:none;" />
 
                 <!-- 인증 마크 (Certification Badges) -->
                 <div id="certificationContainer"
@@ -654,8 +688,19 @@
             document.getElementById('brandText').textContent = data.brand || '브랜드 미등록';
             document.getElementById('originText').textContent = data.origin || '정보 없음';
             document.getElementById('productName').textContent = data.productName;
-            const img = document.getElementById('productImg');
-            if (data.image) { img.src = data.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
+            // ── 이미지 탭 처리
+            const frontImg = document.getElementById('productImg');
+            const nutriImg = document.getElementById('nutriImg');
+            const ingrImg  = document.getElementById('ingrImg');
+            const tabGroup = document.getElementById('imgTabGroup');
+            const tabNutri = document.getElementById('tabNutri');
+            const tabIngr  = document.getElementById('tabIngr');
+            [frontImg, nutriImg, ingrImg].forEach(el => el.style.display = 'none');
+            [tabNutri, tabIngr].forEach(el => el.style.display = 'none');
+            tabGroup.style.display = 'none';
+            if (data.image)           { frontImg.src = data.image;           frontImg.style.display = 'block'; tabGroup.style.display = 'flex'; }
+            if (data.imageNutrition)  { nutriImg.src = data.imageNutrition;  tabNutri.style.display = 'inline-block'; tabGroup.style.display = 'flex'; }
+            if (data.imageIngredients){ ingrImg.src  = data.imageIngredients;tabIngr.style.display  = 'inline-block'; tabGroup.style.display = 'flex'; }
 
             // ── 인증 마크
             const certCont = document.getElementById('certificationContainer');
@@ -794,6 +839,17 @@
         }
         searchBtn.addEventListener('click', () => handleSearch());
         barcodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+
+        // 이미지 탭 전환
+        function switchImg(type) {
+            document.getElementById('productImg').style.display = 'none';
+            document.getElementById('nutriImg').style.display   = 'none';
+            document.getElementById('ingrImg').style.display    = 'none';
+            document.querySelectorAll('.img-tab-btn').forEach(b => b.classList.remove('active'));
+            if (type === 'front') { document.getElementById('productImg').style.display = 'block'; document.querySelectorAll('.img-tab-btn')[0].classList.add('active'); }
+            if (type === 'nutri') { document.getElementById('nutriImg').style.display   = 'block'; document.querySelectorAll('.img-tab-btn')[1].classList.add('active'); }
+            if (type === 'ingr')  { document.getElementById('ingrImg').style.display    = 'block'; document.querySelectorAll('.img-tab-btn')[2].classList.add('active'); }
+        }
         document.getElementById('scoreDetailBtn').addEventListener('click', () => {
             const box = document.getElementById('scoreBreakdownBox');
             box.style.display = box.style.display === 'none' ? 'block' : 'none';
