@@ -1,7 +1,11 @@
 // ============================================================
-//  scan.js — 뚱땡이 아빠의 AI 식품 안전 스캐너 (v3 최종판)
-//  데이터 우선순위: ① 식품안전나라(식약처) → ② Open Food Facts → ③ 표기불가
-//  영양성분 기준: 제품 전체 용량 기준 (1회 제공량 × 총 제공횟수)
+//  scan.js — 뚱땡이 아빠의 AI 식품 안전 스캐너 (v4 버그픽스판)
+//  수정사항:
+//    ① parseKr — '0' 값도 유효 처리 (당류 0g 누락 버그 수정)
+//    ② parseSize — 숫자만 있는 경우도 파싱 (servingG null 버그 수정)
+//    ③ OFF fallback — servingG null 시 100g 그대로 쓰던 오류 수정
+//    ④ 알레르기 — RAWMTRL_NM 한글 원재료명에서 직접 추출 추가
+//    ⑤ 이미지 — 짤린 small 이미지 대신 front_url 우선, display 정책 수정
 // ============================================================
 
 const FOODSAFETY_KEY = process.env.FOODSAFETY_API_KEY || "0568dde2474141e595f9";
@@ -60,73 +64,91 @@ module.exports = async (req, res) => {
         else if (p)                     ingredients = (p.ingredients_text_ko || p.ingredients_text || "").toLowerCase();
 
         // ══════════════════════════════════════════════════════
-        //  ✅ 제품 전체 용량 기준 영양성분 환산 로직
-        //
-        //  식약처 C005는 1회 제공량(SERVING_SIZE) 기준으로 수치 제공
-        //  총 제공횟수(SERVING_TOTAL) 있으면 × 총횟수 = 제품 전체 기준
-        //  없으면 총 내용량(NET_WT) ÷ 1회 제공량(g) 으로 횟수 역산
-        //
-        //  예) 새우깡 90g, 1회 제공량 30g, 나트륨 1회 150mg
-        //      → 총 제공횟수 = 90 ÷ 30 = 3회
-        //      → 제품 전체 나트륨 = 150 × 3 = 450mg
+        //  ✅ BUG FIX ① parseKr — '0'도 유효한 값으로 처리
+        //  기존: val !== '0' 조건으로 당류 0g 등을 null 처리 → 정보 없음 버그
+        //  수정: undefined/null/빈문자열만 null, '0'과 0은 0으로 반환
         // ══════════════════════════════════════════════════════
-        const parseKr   = (val) => (val && val !== "" && val !== "0") ? parseFloat(val) : null;
-        const parseSize = (str) => {
-            if (!str) return null;
-            // "30g", "30 g", "30ml", "1개(30g)" 등 다양한 형태 처리
-            const m = String(str).match(/([\d.]+)\s*(g|ml)/i);
-            return m ? parseFloat(m[1]) : null;
+        const parseKr = (val) => {
+            if (val === undefined || val === null || val === "") return null;
+            const n = parseFloat(val);
+            return isNaN(n) ? null : n;  // '0' → 0 정상 반환
         };
 
-        const servingSizeRaw = krData?.SERVING_SIZE || p?.serving_size || null;  // "30g"
-        const servingG       = parseSize(servingSizeRaw);                         // 30 (숫자)
+        // ══════════════════════════════════════════════════════
+        //  ✅ BUG FIX ② parseSize — 숫자만 있는 경우도 처리
+        //  '30g', '컵(65g)', '1개(30g)', '65', '65.5' 모두 처리
+        // ══════════════════════════════════════════════════════
+        const parseSize = (str) => {
+            if (!str) return null;
+            const s = String(str);
+            // "(숫자g)" or "숫자g" or "숫자 g" 패턴
+            const m = s.match(/([\d.]+)\s*(g|ml)/i);
+            if (m) return parseFloat(m[1]);
+            // 단위 없이 숫자만 있는 경우 (예: "65", "30.5")
+            const n = s.match(/^[\d.]+$/);
+            if (n) return parseFloat(n[0]);
+            return null;
+        };
 
-        // 총 내용량: 식약처 NET_WT 우선, OFF quantity 보조
+        const servingSizeRaw = krData?.SERVING_SIZE || p?.serving_size || null;
+        const servingG       = parseSize(servingSizeRaw);
+
         const netWtRaw = krData?.NET_WT || p?.quantity || null;
         const netWtG   = parseSize(netWtRaw) || parseFloat(netWtRaw) || null;
 
-        // 총 제공횟수 계산
+        // 총 제공횟수
         let totalServings = parseKr(krData?.SERVING_TOTAL) || null;
         if (!totalServings && servingG && netWtG && netWtG > servingG) {
             totalServings = Math.round(netWtG / servingG);
         }
-        if (!totalServings) totalServings = 1; // 산출 불가 시 1회분 그대로
-
-        // 1회 제공량 기준 원본 수치
-        const kcalPerServing  = parseKr(krData?.NUTR_CONT1) ||
-            (p?.nutriments?.["energy-kcal_serving"] ? Math.round(p.nutriments["energy-kcal_serving"]) : null);
-        const fatPerServing    = parseKr(krData?.NUTR_CONT4) ||
-            (p?.nutriments?.fat_100g    != null ? p.nutriments.fat_100g    * (servingG || 100) / 100 : null);
-        const sugarsPerServing = parseKr(krData?.NUTR_CONT3) ||
-            (p?.nutriments?.sugars_100g != null ? p.nutriments.sugars_100g * (servingG || 100) / 100 : null);
-        const sodiumPerServing = parseKr(krData?.NUTR_CONT9) ||
-            (p?.nutriments?.sodium_100g != null ? p.nutriments.sodium_100g * 1000 * (servingG || 100) / 100 : null);
-        const carbsPerServing  = parseKr(krData?.NUTR_CONT2) || null;
-        const proteinPerServing= parseKr(krData?.NUTR_CONT8) ||
-            (p?.nutriments?.proteins_100g != null ? p.nutriments.proteins_100g * (servingG || 100) / 100 : null);
-        const transFatPerServ  = parseKr(krData?.NUTR_CONT5) || null;
-        const satFatPerServ    = parseKr(krData?.NUTR_CONT6) || null;
-
-        // ✅ 제품 전체 기준 환산 (× 총 제공횟수)
-        const toTotal = (val) => val !== null ? Math.round(val * totalServings * 10) / 10 : null;
-
-        const kcalTotal    = toTotal(kcalPerServing);
-        const fatTotal     = toTotal(fatPerServing);
-        const sugarsTotal  = toTotal(sugarsPerServing);
-        const sodiumTotal  = toTotal(sodiumPerServing);
-        const carbsTotal   = toTotal(carbsPerServing);
-        const proteinTotal = toTotal(proteinPerServing);
-        const transFatTotal= toTotal(transFatPerServ);
-        const satFatTotal  = toTotal(satFatPerServ);
+        if (!totalServings) totalServings = 1;
 
         // ══════════════════════════════════════════════════════
-        //  칼로리 표기 (제품 전체 기준)
+        //  ✅ BUG FIX ③ OFF fallback 계산식 수정
+        //  기존: fat_100g * (servingG || 100) / 100
+        //        → servingG null이면 100 대입 → 100g 기준값 그대로 (오류)
+        //  수정: servingG 없으면 OFF serving 기준값 직접 사용
+        // ══════════════════════════════════════════════════════
+        const offNutri = p?.nutriments || {};
+        const scaledOff = (key100, keyServing) => {
+            // 1회 제공량 기준 값이 있으면 우선 사용
+            if (offNutri[keyServing] != null) return offNutri[keyServing];
+            // 100g 기준값 × (1회 제공량g / 100) — servingG 있을 때만
+            if (offNutri[key100] != null && servingG) return offNutri[key100] * servingG / 100;
+            return null;
+        };
+
+        const kcalPerServing  = parseKr(krData?.NUTR_CONT1) ?? scaledOff("energy-kcal_100g",  "energy-kcal_serving");
+        const carbsPerServing = parseKr(krData?.NUTR_CONT2) ?? scaledOff("carbohydrates_100g", "carbohydrates_serving");
+        const sugarsPerServing= parseKr(krData?.NUTR_CONT3) ?? scaledOff("sugars_100g",        "sugars_serving");
+        const fatPerServing   = parseKr(krData?.NUTR_CONT4) ?? scaledOff("fat_100g",           "fat_serving");
+        const transFatPerServ = parseKr(krData?.NUTR_CONT5) ?? scaledOff("trans-fat_100g",     "trans-fat_serving");
+        const satFatPerServ   = parseKr(krData?.NUTR_CONT6) ?? scaledOff("saturated-fat_100g", "saturated-fat_serving");
+        const proteinPerServing=parseKr(krData?.NUTR_CONT8) ?? scaledOff("proteins_100g",      "proteins_serving");
+        // 나트륨: 식약처 mg 직접 / OFF는 g→mg 변환
+        const sodiumPerServing= parseKr(krData?.NUTR_CONT9) ??
+            (offNutri["sodium_serving"] != null ? offNutri["sodium_serving"] * 1000 :
+             offNutri["sodium_100g"]    != null && servingG ? offNutri["sodium_100g"] * 1000 * servingG / 100 : null);
+
+        // 제품 전체 기준 환산
+        const toTotal = (val) => val !== null ? Math.round(val * totalServings * 10) / 10 : null;
+        const kcalTotal    = toTotal(kcalPerServing);
+        const carbsTotal   = toTotal(carbsPerServing);
+        const sugarsTotal  = toTotal(sugarsPerServing);
+        const fatTotal     = toTotal(fatPerServing);
+        const transFatTotal= toTotal(transFatPerServ);
+        const satFatTotal  = toTotal(satFatPerServ);
+        const proteinTotal = toTotal(proteinPerServing);
+        const sodiumTotal  = toTotal(sodiumPerServing);
+
+        // ══════════════════════════════════════════════════════
+        //  칼로리 표기
         // ══════════════════════════════════════════════════════
         let caloriesText = "열량 정보 없음 (비공개)";
         if (kcalTotal !== null) {
             const baseStr = netWtRaw ? `${netWtRaw} 전체` : `제품 1개 전체`;
-            const servStr = (kcalPerServing && totalServings > 1)
-                ? ` (1회 ${servingSizeRaw || "제공량"}: ${kcalPerServing}kcal × ${totalServings}회)` : "";
+            const servStr = (kcalPerServing !== null && totalServings > 1)
+                ? ` (1회 ${servingSizeRaw || "제공량"}: ${Math.round(kcalPerServing)}kcal × ${totalServings}회)` : "";
             caloriesText = `${baseStr}: ${kcalTotal}kcal${servStr}`;
         }
 
@@ -148,6 +170,7 @@ module.exports = async (req, res) => {
             "팜유":          { name: "팜유",                     risk: "포화지방 과다 → LDL 콜레스테롤 상승 ⚠️" },
             "palm oil":      { name: "팜유",                     risk: "포화지방 과다 ⚠️" },
             "마가린":        { name: "마가린",                   risk: "트랜스지방 함유 → 혈관 벽 손상 🔴" },
+            "쇼트닝":        { name: "쇼트닝",                   risk: "트랜스지방 함유 → 혈관 벽 손상 🔴" },
             "소르빈산":      { name: "소르빈산염",               risk: "보존료: 피부 점막 자극·알레르기 유발 우려 ⚠️" },
             "아질산나트륨":  { name: "아질산나트륨",             risk: "발색제: 1급 발암물질(니트로사민) 생성 위험 🔴" },
             "안식향산나트륨":{ name: "안식향산나트륨",           risk: "보존료: 비타민C 결합 시 벤젠(1급 발암) 생성 🔴" },
@@ -156,7 +179,9 @@ module.exports = async (req, res) => {
             "합성향료":      { name: "합성향료",                 risk: "미확인 화학물질 배합: 알레르기·두통 원인 ⚠️" },
             "타르색소":      { name: "타르색소",                 risk: "인공 착색료: 아동 ADHD·정서 불안 촉발 의심 🔴" },
             "적색40호":      { name: "적색40호",                 risk: "인공 색소: 과잉행동장애 의심 🔴" },
-            "황색4호":       { name: "황색4호",                  risk: "인공 색소: 천식 알레르기 의심 🔴" }
+            "황색4호":       { name: "황색4호",                  risk: "인공 색소: 천식 알레르기 의심 🔴" },
+            "황색5호":       { name: "황색5호",                  risk: "인공 색소: 알레르기 반응 의심 ⚠️" },
+            "카라멜색소":    { name: "카라멜색소",               risk: "4-MEI 발암물질 포함 가능성 ⚠️" },
         };
 
         const detectedBadObjs = [];
@@ -169,12 +194,81 @@ module.exports = async (req, res) => {
         const additives      = p?.additives_tags || [];
 
         // ══════════════════════════════════════════════════════
+        //  ✅ BUG FIX ④⑤ 알레르기 — RAWMTRL_NM 한글 원재료명에서 직접 추출
+        //  기존: OFF allergens_tags(영문) 만 보고 한국 제품 대부분 누락
+        //  수정: 한글 원재료명에서 한글 알레르기 키워드 직접 탐지 후 병합
+        // ══════════════════════════════════════════════════════
+
+        // 한글 원재료명 알레르기 탐지 맵 (식약처 표기 기준 22종)
+        const krAllergenMap = [
+            { keys: ["우유", "탈지분유", "전지분유", "유청", "버터", "치즈", "크림"],    label: "우유 (유제품)" },
+            { keys: ["대두", "두유", "콩"],                                               label: "대두(콩)" },
+            { keys: ["밀", "소맥분", "글루텐", "빵가루"],                                label: "밀 (글루텐)" },
+            { keys: ["달걀", "계란", "난백", "난황"],                                    label: "달걀" },
+            { keys: ["땅콩", "피넛"],                                                     label: "땅콩 (🔴 쇼크 위험)" },
+            { keys: ["새우", "건새우"],                                                   label: "새우 (갑각류 🔴)" },
+            { keys: ["게", "꽃게"],                                                       label: "게 (갑각류 🔴)" },
+            { keys: ["고등어"],                                                            label: "고등어 (생선)" },
+            { keys: ["복숭아"],                                                            label: "복숭아" },
+            { keys: ["토마토"],                                                            label: "토마토" },
+            { keys: ["아황산", "이산화황"],                                               label: "아황산염 (🔴 천식 주의)" },
+            { keys: ["호두"],                                                              label: "호두 (견과류)" },
+            { keys: ["잣"],                                                                label: "잣 (견과류)" },
+            { keys: ["아몬드"],                                                            label: "아몬드 (견과류)" },
+            { keys: ["참깨", "참기름"],                                                   label: "참깨" },
+            { keys: ["돼지고기", "돈육", "돈지"],                                         label: "돼지고기" },
+            { keys: ["소고기", "우육", "쇠고기"],                                         label: "소고기" },
+            { keys: ["닭고기", "계육"],                                                   label: "닭고기" },
+            { keys: ["오징어"],                                                            label: "오징어 (연체동물)" },
+            { keys: ["조개", "굴", "홍합", "전복"],                                      label: "조개류 (연체동물)" },
+        ];
+
+        // OFF 알레르기 번역 맵 (영문)
+        const allergenDict = {
+            "milk": "우유", "soybeans": "대두", "wheat": "밀", "eggs": "달걀",
+            "peanuts": "땅콩 (🔴 쇼크 위험)", "fish": "생선", "crustaceans": "갑각류 (🔴)",
+            "tree nuts": "견과류", "mustard": "머스타드", "sesame": "참깨",
+            "sulphites": "아황산염 (🔴 천식 주의)", "molluscs": "연체동물",
+            "gluten": "글루텐", "soy": "콩", "pork": "돼지고기", "beef": "소고기"
+        };
+
+        // ① 한글 원재료명에서 직접 탐지
+        const krAllergens = [];
+        const ingForAllergen = (krData?.RAWMTRL_NM || "").toLowerCase();
+        if (ingForAllergen) {
+            krAllergenMap.forEach(({ keys, label }) => {
+                if (keys.some(k => ingForAllergen.includes(k)) && !krAllergens.includes(label)) {
+                    krAllergens.push(label);
+                }
+            });
+        }
+
+        // ② OFF allergens 영문 → 한글 변환
+        let offAllergens = [];
+        if (p?.allergens_tags?.length > 0) {
+            offAllergens = p.allergens_tags.map(tag =>
+                allergenDict[tag.replace(/en:|fr:|ko:/g, "").toLowerCase()] ||
+                tag.replace(/en:|fr:|ko:/g, "").toLowerCase()
+            );
+        } else if (p?.allergens_from_ingredients) {
+            let raw = p.allergens_from_ingredients.replace(/en:/g, "").toLowerCase();
+            Object.keys(allergenDict).forEach(en => {
+                raw = raw.replace(new RegExp(`\\b${en}\\b`, "gi"), allergenDict[en]);
+            });
+            if (raw.trim()) offAllergens = raw.split(",").map(s => s.trim()).filter(Boolean);
+        }
+
+        // ③ 병합 (중복 제거)
+        const merged = [...new Set([...krAllergens, ...offAllergens])];
+        const translatedAllergens = merged.length > 0 ? merged : ["없음"];
+
+        // ══════════════════════════════════════════════════════
         //  점수 산정
         // ══════════════════════════════════════════════════════
         let baseScore = 100;
         const scoreBreakdown = [];
         if (additives.length > 0) {
-            const p1 = additives.length * 5;
+            const p1 = Math.min(additives.length * 5, 40); // 최대 -40점
             scoreBreakdown.push(`일반 화학 첨가물 ${additives.length}개 발견 (-${p1}점)`);
             baseScore -= p1;
         }
@@ -187,7 +281,6 @@ module.exports = async (req, res) => {
 
         // ══════════════════════════════════════════════════════
         //  영양소 위험도 — 제품 전체 기준 × K-FDA 1일 권장량 비율
-        //  기준: 지방 54g / 당류 100g / 나트륨 2000mg (식약처 고시)
         // ══════════════════════════════════════════════════════
         const kfdaPercent = (val, dailyLimit, name) => {
             if (val === null) return { value: "?", level: "unknown", text: "정보 없음", emoji: "⚪" };
@@ -206,31 +299,25 @@ module.exports = async (req, res) => {
         };
 
         // ══════════════════════════════════════════════════════
-        //  타겟 경고 (제품 전체 기준)
+        //  타겟 경고
         // ══════════════════════════════════════════════════════
         const targetWarnings = [];
-        const isHighSugar    = sugarsTotal !== null && sugarsTotal > 25;
-        const hasBadSweeteners = Object.keys(warningDict).some(
-            w => ingredients.includes(w) && ["비만","혈당","당","상승"].some(r => warningDict[w].risk.includes(r))
-        );
-        if (isHighSugar || hasBadSweeteners)
+        if ((sugarsTotal !== null && sugarsTotal > 25) ||
+            Object.keys(warningDict).some(w => ingredients.includes(w) && ["비만","혈당","당","상승"].some(r => warningDict[w].risk.includes(r))))
             targetWarnings.push("🩸 당뇨/혈당 스파이크 경고 (제품 1개 당류 과다 또는 혈당 교란 감미료 발견)");
         if (sodiumTotal !== null && sodiumTotal > 1000)
             targetWarnings.push("🫀 심혈관/고혈압 주의 (제품 1개 나트륨이 1일 권장량 50% 초과)");
-        const hasBadChemicals = Object.keys(warningDict).some(
-            w => ingredients.includes(w) && ["발암","ADHD","벤젠","색소"].some(r => warningDict[w].risk.includes(r))
-        );
-        if (hasBadChemicals || ingredients.includes("카페인") || ingredients.includes("caffeine"))
+        if (Object.keys(warningDict).some(w => ingredients.includes(w) && ["발암","ADHD","벤젠","색소"].some(r => warningDict[w].risk.includes(r)))
+            || ingredients.includes("카페인") || ingredients.includes("caffeine"))
             targetWarnings.push("👶 영유아/임산부 섭취 강력 제한 요망 (발암/타르색소/보존료/카페인 발견)");
 
         // ══════════════════════════════════════════════════════
-        //  그린워싱 경고
+        //  그린워싱
         // ══════════════════════════════════════════════════════
         let greenwashingAlert = null;
         const fakeKeywords = ["제로","zero","라이트","light","무가당","슈가프리","슈거프리","천연","내추럴","내츄럴","natural"];
-        if (fakeKeywords.some(kw => fullName.toLowerCase().includes(kw)) && uniqueBadCount > 0) {
+        if (fakeKeywords.some(kw => fullName.toLowerCase().includes(kw)) && uniqueBadCount > 0)
             greenwashingAlert = "🚨 [그린워싱 주의] 마케팅은 '제로/천연'이나, 실제 유해 감미료·화학제가 발견되었습니다.";
-        }
 
         // ══════════════════════════════════════════════════════
         //  인증
@@ -243,7 +330,7 @@ module.exports = async (req, res) => {
         if (allTextForCert.includes("무항생제") || allTextForCert.includes("무농약")) certifications.push("무농약/무항생제 검증 🌿");
 
         // ══════════════════════════════════════════════════════
-        //  ✅ NOVA 가공등급 — OFF 우선, 없으면 식약처 품목유형으로 자체 추정
+        //  NOVA 가공등급
         // ══════════════════════════════════════════════════════
         const novaDesc = {
             1: "자연 원재료 (건강식 🟢)",
@@ -255,24 +342,15 @@ module.exports = async (req, res) => {
         function estimateNova(krCategory, ingredients) {
             const cat = (krCategory || "").toLowerCase();
             const ing = (ingredients  || "").toLowerCase();
-
-            // NOVA 1: 자연 원재료
             if (["신선","생과일","냉동과일","냉동채소","건조과일"].some(k => cat.includes(k))) return 1;
-
-            // NOVA 4: 초가공식품
-            const ultraCat = ["과자","라면","탄산음료","아이스크림","햄","소시지","어묵","케첩","마요네즈","스낵","캔디","초콜릿","비스킷"];
-            const ultraIng = ["합성향료","타르색소","아질산","수크랄로스","아스파탐","아세설팜","안식향산","소르빈산"];
+            const ultraCat = ["과자","라면","탄산음료","아이스크림","햄","소시지","어묵","케첩","마요네즈","스낵","캔디","초콜릿","비스킷","컵라면"];
+            const ultraIng = ["합성향료","타르색소","아질산","수크랄로스","아스파탐","아세설팜","안식향산","소르빈산","쇼트닝"];
             if (ultraCat.some(k => cat.includes(k)) || ultraIng.some(k => ing.includes(k))) return 4;
-
-            // NOVA 3: 일반 가공식품
             const procCat = ["음료","빵","면류","통조림","소스","드레싱","잼","요구르트","치즈","두부","김치","젓갈"];
             if (procCat.some(k => cat.includes(k))) return 3;
-
-            // NOVA 2: 기본 가공 식재료
             const simpleCat = ["식용유","밀가루","설탕","소금","간장","식초","전분"];
             if (simpleCat.some(k => cat.includes(k) || ing.startsWith(k))) return 2;
-
-            return 3; // 보수적 기본값
+            return 3;
         }
 
         const krCategory = krData?.PRDLST_DCNM || "";
@@ -281,28 +359,16 @@ module.exports = async (req, res) => {
         const nova = `NOVA ${novaGroup} - ${novaDesc[novaGroup]}${novaSource}`;
 
         // ══════════════════════════════════════════════════════
-        //  알레르기
+        //  ✅ BUG FIX ⑤ 이미지 — 짤린 small 이미지 제거, 우선순위 재정립
+        //  image_front_url  : 전면 원본 (최우선)
+        //  image_url        : 일반 원본
+        //  image_front_small_url : 썸네일 (짤림 발생 원인) → 최후순위
         // ══════════════════════════════════════════════════════
-        const allergenDict = {
-            "milk": "우유", "soybeans": "대두", "wheat": "밀", "eggs": "달걀", "peanuts": "땅콩 (🔴 쇼크 위험)",
-            "fish": "생선", "crustaceans": "갑각류 (🔴)", "tree nuts": "견과류", "mustard": "머스타드",
-            "sesame": "참깨", "sulphites": "아황산염 (🔴 천식 주의)", "molluscs": "연체동물", "almond": "아몬드",
-            "gluten": "글루텐", "soy": "콩", "pork": "돼지고기", "beef": "소고기"
-        };
-
-        let translatedAllergens = ["없음"];
-        if (p?.allergens_tags?.length > 0) {
-            translatedAllergens = p.allergens_tags.map(tag =>
-                allergenDict[tag.replace(/en:|fr:|ko:/g, "").toLowerCase()] ||
-                tag.replace(/en:|fr:|ko:/g, "").toLowerCase()
-            );
-        } else if (p?.allergens_from_ingredients) {
-            let raw = p.allergens_from_ingredients.replace(/en:/g, "").toLowerCase();
-            Object.keys(allergenDict).forEach(en => {
-                raw = raw.replace(new RegExp(`\\b${en}\\b`, "gi"), allergenDict[en]);
-            });
-            if (raw.trim()) translatedAllergens = raw.split(",").map(s => s.trim());
-        }
+        const productImage =
+            p?.image_front_url ||
+            p?.image_url       ||
+            p?.image_front_small_url || // 없을 때만 소형 이미지 사용
+            "";
 
         // ══════════════════════════════════════════════════════
         //  최종 응답
@@ -319,18 +385,18 @@ module.exports = async (req, res) => {
             nova:         nova,
             macros:       macros,
 
-            // ✅ 제품 전체 영양 상세 (index.html UI 확장용)
+            // 제품 전체 영양 상세
             nutriDetail: {
                 basis:        netWtRaw ? `${netWtRaw} 전체 기준` : `제품 1개(${totalServings}회분) 전체 기준`,
                 servingInfo:  (servingSizeRaw && totalServings > 1) ? `1회 제공량: ${servingSizeRaw} × ${totalServings}회` : null,
                 kcal:         kcalTotal,
-                carbs:        carbsTotal   !== null ? `${carbsTotal}g`          : null,
-                sugars:       sugarsTotal  !== null ? `${sugarsTotal}g`         : null,
-                fat:          fatTotal     !== null ? `${fatTotal}g`            : null,
-                saturatedFat: satFatTotal  !== null ? `${satFatTotal}g`         : null,
-                transFat:     transFatTotal !== null ? `${transFatTotal}g`      : null,
-                protein:      proteinTotal !== null ? `${proteinTotal}g`        : null,
-                sodium:       sodiumTotal  !== null ? `${Math.round(sodiumTotal)}mg` : null,
+                carbs:        carbsTotal    !== null ? `${carbsTotal}g`              : null,
+                sugars:       sugarsTotal   !== null ? `${sugarsTotal}g`             : null,
+                fat:          fatTotal      !== null ? `${fatTotal}g`               : null,
+                saturatedFat: satFatTotal   !== null ? `${satFatTotal}g`            : null,
+                transFat:     transFatTotal !== null ? `${transFatTotal}g`           : null,
+                protein:      proteinTotal  !== null ? `${proteinTotal}g`           : null,
+                sodium:       sodiumTotal   !== null ? `${Math.round(sodiumTotal)}mg`: null,
             },
 
             targetWarnings:    targetWarnings,
@@ -345,7 +411,7 @@ module.exports = async (req, res) => {
             scoreBreakdown: scoreBreakdown,
             isScraped:      false,
             allergens:      translatedAllergens,
-            image:          p?.image_front_url || p?.image_url || p?.image_front_small_url || "",
+            image:          productImage,
             imageNutrition:  p?.image_nutrition_url    || null,
             imageIngredients: p?.image_ingredients_url || null,
             _source: krData ? "식품안전나라(식약처)" : "Open Food Facts"
