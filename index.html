@@ -374,16 +374,53 @@
         }
 
         @keyframes fadeInUp {
-            from {
-                transform: translateY(30px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
+            from { transform: translateY(30px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
         }
+
+        /* ── 영양 상세 테이블 ── */
+        .nutri-detail-section {
+            background: #FFF;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #E5E5EA;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        }
+        .nutri-basis {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #8E8E93;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        .nutri-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .nutri-table tr {
+            border-bottom: 1px solid #F2F2F7;
+        }
+        .nutri-table tr:last-child { border-bottom: none; }
+        .nutri-table td {
+            padding: 10px 6px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+        .nutri-table td:first-child {
+            color: #8E8E93;
+            font-weight: 600;
+            width: 45%;
+        }
+        .nutri-table td:last-child {
+            text-align: right;
+            font-weight: 900;
+        }
+        .nutri-row-main td { font-size: 1rem; }
+        .nutri-row-sub  td { padding-left: 20px; color: #AEAEB2; font-size: 0.85rem; }
+        .nutri-row-sub  td:last-child { color: #8E8E93; font-weight: 700; }
+        .nutri-highlight td:last-child { color: var(--danger); }
     </style>
 </head>
 
@@ -413,8 +450,6 @@
                         id="originText" style="color: #3A3A3C;"></span></div>
                 <h3 class="product-title" id="productName"></h3>
                 <img id="productImg" class="product-img" src="" alt="제품 사진" style="display: none;" />
-                <div id="secondaryImgs"
-                    style="display: flex; gap: 10px; margin-top: 10px; justify-content: center; flex-wrap: wrap;"></div>
 
                 <!-- 인증 마크 (Certification Badges) -->
                 <div id="certificationContainer"
@@ -461,9 +496,18 @@
                     </div>
                 </div>
 
+                <!-- 영양 상세 테이블 (제품 전체 기준) -->
+                <div class="nutri-detail-section" id="nutriDetailSection" style="display:none;">
+                    <h4 class="health-title">📋 영양성분 전체 함유량</h4>
+                    <div class="nutri-basis" id="nutriBasis"></div>
+                    <table class="nutri-table">
+                        <tbody id="nutriTableBody"></tbody>
+                    </table>
+                </div>
+
                 <!-- K-FDA Macros -->
                 <div style="font-weight:900; margin: 20px 0 10px 0; display:flex; align-items:center; gap:8px;">
-                    <span>🇰🇷 식약처 1일 영양성분 섭취 기준 비율</span>
+                    <span>🇰🇷 식약처 1일 권장량 대비 (제품 1개 기준)</span>
                 </div>
                 <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-card" style="padding: 12px 8px;">
@@ -610,11 +654,7 @@
             const img = document.getElementById('productImg');
             if (data.image) { img.src = data.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
 
-            const secImgs = document.getElementById('secondaryImgs');
-            secImgs.innerHTML = '';
-            if (data.imageNutrition) secImgs.innerHTML += `<img src="${data.imageNutrition}" style="width: 48%; border-radius: 12px; border: 2px solid #34C759; object-fit: cover;" alt="영양성분 표시">`;
-            if (data.imageIngredients) secImgs.innerHTML += `<img src="${data.imageIngredients}" style="width: 48%; border-radius: 12px; border: 2px solid #FF9500; object-fit: cover;" alt="원재료명 표시">`;
-
+            // ── 인증 마크
             const certCont = document.getElementById('certificationContainer');
             certCont.innerHTML = '';
             if (data.certifications && data.certifications.length > 0) {
@@ -622,18 +662,19 @@
                 data.certifications.forEach(cert => {
                     const d = document.createElement('div');
                     d.style.cssText = "background: linear-gradient(135deg, #FFD700, #FDB931); color: #B35900; padding: 6px 14px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; box-shadow: 0 4px 10px rgba(253, 185, 49, 0.3); border: 1.5px solid #E8A317;";
-                    if (cert.includes('HACCP')) d.innerHTML = '🛡️ ' + cert;
-                    else d.innerHTML = cert;
+                    d.innerHTML = cert.includes('HACCP') ? '🛡️ ' + cert : cert;
                     certCont.appendChild(d);
                 });
             } else { certCont.style.display = 'none'; }
 
+            // ── 그린워싱
             const gwCont = document.getElementById('greenwashingContainer');
             if (data.greenwashingAlert) {
                 gwCont.style.display = 'block';
                 document.getElementById('greenwashingText').textContent = data.greenwashingAlert;
             } else { gwCont.style.display = 'none'; }
 
+            // ── Nutri-Score
             const scoreCont = document.getElementById('nutriScoreContainer');
             const scoreBadge = document.getElementById('nutriScoreBadge');
             const scoreLetter = document.getElementById('nutriScoreLetter');
@@ -644,6 +685,7 @@
                 scoreBadge.style.background = colors[data.nutriGrade] || '#8E8E93';
             } else { scoreCont.style.display = 'none'; }
 
+            // ── 타겟 경고
             const twCont = document.getElementById('targetWarningsContainer');
             twCont.innerHTML = '';
             if (data.targetWarnings && data.targetWarnings.length > 0) {
@@ -656,8 +698,10 @@
                 });
             } else { twCont.style.display = 'none'; }
 
+            // ── 안전점수
             const sc = document.getElementById('score');
-            sc.textContent = `${data.score}점`; sc.className = 'metric-value ' + (data.score >= 80 ? 'good' : (data.score >= 50 ? '' : 'bad'));
+            sc.textContent = `${data.score}점`;
+            sc.className = 'metric-value ' + (data.score >= 80 ? 'good' : (data.score >= 50 ? '' : 'bad'));
 
             const sbdList = document.getElementById('scoreBreakdownList');
             sbdList.innerHTML = '';
@@ -673,25 +717,67 @@
                 document.getElementById('brandText').style.color = '#34C759';
             }
 
+            // ── 칼로리
             document.getElementById('calories').textContent = data.calories || '비공개';
 
+            // ── ✅ 영양성분 상세 테이블 (nutriDetail)
+            const nd = data.nutriDetail;
+            const nutriSection = document.getElementById('nutriDetailSection');
+            if (nd) {
+                nutriSection.style.display = 'block';
+                document.getElementById('nutriBasis').textContent =
+                    (nd.servingInfo ? nd.servingInfo + ' | ' : '') + nd.basis;
+
+                const tbody = document.getElementById('nutriTableBody');
+                tbody.innerHTML = '';
+
+                const rows = [
+                    { label: '열량',       val: nd.kcal    ? nd.kcal + 'kcal' : null, cls: 'nutri-row-main' },
+                    { label: '탄수화물',   val: nd.carbs,                              cls: 'nutri-row-main' },
+                    { label: '└ 당류',     val: nd.sugars,                             cls: 'nutri-row-sub'  },
+                    { label: '지방',       val: nd.fat,                                cls: 'nutri-row-main' },
+                    { label: '└ 포화지방', val: nd.saturatedFat,                       cls: 'nutri-row-sub'  },
+                    { label: '└ 트랜스지방',val: nd.transFat,                          cls: 'nutri-row-sub nutri-highlight' },
+                    { label: '단백질',     val: nd.protein,                            cls: 'nutri-row-main' },
+                    { label: '나트륨',     val: nd.sodium,                             cls: 'nutri-row-main' },
+                ];
+
+                rows.forEach(row => {
+                    if (!row.val) return; // 데이터 없는 항목 숨김
+                    const tr = document.createElement('tr');
+                    tr.className = row.cls || '';
+                    tr.innerHTML = `<td>${row.label}</td><td>${row.val}</td>`;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                nutriSection.style.display = 'none';
+            }
+
+            // ── K-FDA 3대 매크로 (당류/지방/나트륨 위험도)
             if (data.macros) {
                 const mapMacro = (htmlKey, dataKey) => {
                     if (!data.macros[dataKey]) return;
                     document.getElementById(htmlKey + 'Emoji').textContent = data.macros[dataKey].emoji;
-                    document.getElementById(htmlKey + 'Val').textContent = data.macros[dataKey].value;
-                    document.getElementById(htmlKey + 'Txt').textContent = data.macros[dataKey].text;
-                    document.getElementById(htmlKey + 'Txt').style.color = data.macros[dataKey].level === 'red' ? '#FF3B30' : (data.macros[dataKey].level === 'amber' ? '#FF9500' : '#34C759');
+                    document.getElementById(htmlKey + 'Val').textContent   = data.macros[dataKey].value;
+                    document.getElementById(htmlKey + 'Txt').textContent   = data.macros[dataKey].text;
+                    document.getElementById(htmlKey + 'Txt').style.color   =
+                        data.macros[dataKey].level === 'red'   ? '#FF3B30' :
+                        data.macros[dataKey].level === 'amber' ? '#FF9500' : '#34C759';
                 };
-                mapMacro('sugar', 'sugars'); mapMacro('fat', 'fat'); mapMacro('sodium', 'sodium');
+                mapMacro('sugar',  'sugars');
+                mapMacro('fat',    'fat');
+                mapMacro('sodium', 'sodium');
             }
 
+            // ── NOVA / 유해성분 / 알레르기
             document.getElementById('nova').textContent = data.nova || '미분류';
-            if (data.nova && data.nova.includes('초가공')) { document.getElementById('nova').className = 'li-bad'; } else { document.getElementById('nova').className = 'li-allergy'; }
+            document.getElementById('nova').className = (data.nova && data.nova.includes('초가공')) ? 'li-bad' : 'li-allergy';
 
-            populateList('badIngredients', data.badIngredients, String(data.badIngredients).includes('깨끗한') ? 'li-good' : 'li-bad');
+            populateList('badIngredients', data.badIngredients,
+                String(data.badIngredients).includes('깨끗한') ? 'li-good' : 'li-bad');
             populateList('allergens', data.allergens, 'li-allergy');
 
+            // ── 쇼핑 버튼
             storeGrid.innerHTML = '';
             if (priceData && priceData.stores) {
                 priceData.stores.forEach(s => {
