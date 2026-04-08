@@ -42,14 +42,29 @@ const BRAND_EN_KO = {
     "crown":"크라운","maeil":"매일","namyang":"남양","woongjin":"웅진",
 };
 
-// ── 영한 제품명 대조표
+// ── 영한 제품명 대조표 (대폭 확장)
 const PROD_EN_KO = {
+    // 라면
     "dosirak":"도시락","shin ramyun":"신라면","shin ramen":"신라면",
     "buldak":"불닭","chapagetti":"짜파게티","neoguri":"너구리",
     "yukgaejang":"육개장","jin ramen":"진라면","bibim men":"비빔면",
     "ansung tang myun":"안성탕면","kokomen":"꼬꼬면",
+    "samyang ramen":"삼양라면","ramyun":"라면","ramen":"라면",
+    // 음료/유제품
+    "banana milk":"바나나맛우유","banana flavored milk":"바나나맛우유",
+    "strawberry milk":"딸기맛우유","chocolate milk":"초코우유",
+    "milkis":"밀키스","cider":"사이다","cola":"콜라",
+    "sikhye":"식혜","banana":"바나나","barista":"바리스타",
+    // 과자/스낵
     "honey butter":"허니버터","choco pie":"초코파이",
-    "pepero":"빼빼로","homerun ball":"홈런볼",
+    "pepero":"빼빼로","homerun ball":"홈런볼","binch":"빈츠",
+    "jolly pong":"조리퐁","popcorn":"팝콘","chips":"칩스",
+    "cracker":"크래커","biscuit":"비스킷","cookie":"쿠키",
+    // 기타
+    "green tea":"녹차","red bean":"팥","sesame":"참깨",
+    "kimchi":"김치","tuna":"참치","seaweed":"미역",
+    "gochujang":"고추장","doenjang":"된장","soy sauce":"간장",
+    "spaghetti":"스파게티","pasta":"파스타","noodle":"국수",
 };
 
 function toKoName(name, brand) {
@@ -203,9 +218,13 @@ module.exports = async (req, res) => {
         if (!total) total = 1;
 
         const n = p?.nutriments || {};
-        const offSv = (k100, ksv) =>
-            n[ksv] != null ? n[ksv] :
-            (n[k100] != null && svG ? n[k100] * svG / 100 : null);
+        // ✅ svG 없어도 100g 기준값 그대로 사용 (총량 환산 포기하고 정보라도 표시)
+        const offSv = (k100, ksv) => {
+            if (n[ksv]  != null) return n[ksv];                          // 1회제공량 기준 직접값
+            if (n[k100] != null && svG) return n[k100] * svG / 100;     // 100g→1회 환산
+            if (n[k100] != null) return n[k100];                         // ✅ svG 없으면 100g값 그대로
+            return null;
+        };
 
         const kcalPS = parseNum(kr?.NUTR_CONT1)  ?? parseNum(dg?.NUTR_CONT1)  ?? parseNum(kr2?.NUTR_CONT1) ?? offSv("energy-kcal_100g","energy-kcal_serving");
         const carbPS = parseNum(kr?.NUTR_CONT2)  ?? parseNum(dg?.NUTR_CONT5)  ?? parseNum(kr2?.NUTR_CONT2) ?? offSv("carbohydrates_100g","carbohydrates_serving");
