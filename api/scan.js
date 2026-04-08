@@ -1,16 +1,17 @@
 // ============================================================
-//  scan.js — v7 최종판 (당류·나트륨 완전 해결)
-//  데이터 소스 4단계:
-//    1단계: 식약처 C005 (바코드 직접 → 원산지/원재료 최우선)
-//    2단계: 공공데이터포털 식품영양성분DB (영양성분 핵심 소스)
-//             FOOD_NM_KR 제품명 검색 → 당류/나트륨/포화지방/트랜스지방
-//    3단계: 식약처 I2570 (C005 미등록 보완)
-//    4단계: Open Food Facts (이미지/NOVA/알레르기 보조)
+//  scan.js — v8 최종판 (미등록 상품 보완)
+//  데이터 소스 5단계:
+//    1단계: 식약처 C005       (바코드 → 원산지/원재료)
+//    2단계: Open Food Facts   (바코드 → 이미지/NOVA/알레르기)
+//    3단계: 공공데이터포털    (제품명 → 당류/나트륨 핵심 영양)
+//    4단계: 식약처 I2570      (제품명 → C005 미등록 보완)
+//    5단계: UPCitemdb ★NEW    (C005+OFF 둘 다 없을 때 최후 보루)
+//             → 제품명/브랜드/이미지라도 확보해서 "미등록" 방지
 //
-//  공공데이터포털 필드 매핑:
+//  공공데이터포털 필드:
 //    NUTR_CONT1=에너지  NUTR_CONT3=단백질  NUTR_CONT4=지방
 //    NUTR_CONT5=탄수화물  NUTR_CONT6=당류★  NUTR_CONT12=나트륨★
-//    NUTR_CONT21=콜레스테롤  NUTR_CONT22=포화지방  NUTR_CONT23=트랜스지방
+//    NUTR_CONT22=포화지방  NUTR_CONT23=트랜스지방
 // ============================================================
 
 const FOODSAFETY_KEY = process.env.FOODSAFETY_API_KEY || "0568dde2474141e595f9";
@@ -20,7 +21,7 @@ function toFullImage(url) {
     if (!url) return "";
     return url
         .replace(/\.(\d+)\.jpg$/i, ".full.jpg")
-        .replace(/\.small\.jpg$/i, ".full.jpg");
+        .replace(/\.small\.jpg$/i,  ".full.jpg");
 }
 
 const parseNum = (val) => {
@@ -43,7 +44,7 @@ module.exports = async (req, res) => {
 
     try {
         // ══════════════════════════════════════════════════════
-        //  1단계: 식약처 C005 — 바코드 직접 (원산지/원재료)
+        //  1단계: 식약처 C005 — 바코드 직접
         // ══════════════════════════════════════════════════════
         let krData = null;
         try {
@@ -56,7 +57,7 @@ module.exports = async (req, res) => {
         } catch (e) { console.log("C005 실패:", e.message); }
 
         // ══════════════════════════════════════════════════════
-        //  2단계: Open Food Facts (이미지/NOVA/알레르기)
+        //  2단계: Open Food Facts — 바코드
         // ══════════════════════════════════════════════════════
         let p = null;
         try {
@@ -68,17 +69,55 @@ module.exports = async (req, res) => {
             if (j?.status === 1) p = j.product;
         } catch (e) { console.log("OFF 실패:", e.message); }
 
+        // ══════════════════════════════════════════════════════
+        //  5단계: UPCitemdb — C005도 OFF도 없을 때 최후 보루
+        //  제품명/브랜드/이미지 확보 → "미등록 상품" 방지
+        // ══════════════════════════════════════════════════════
+        let upcData = null;
         if (!krData && !p) {
-            return res.status(200).json({ success: false, message: "DB에 아직 등록되지 않은 희귀 상품입니다 🥲" });
+            try {
+                const r = await fetch(
+                    `https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`,
+                    { signal: AbortSignal.timeout(4000) }
+                );
+                const j = await r.json();
+                if (j?.items?.length > 0) {
+                    upcData = j.items[0];
+                    console.log("UPCitemdb 매칭:", upcData.title);
+                }
+            } catch (e) { console.log("UPCitemdb 실패:", e.message); }
         }
 
-        // 기본 제품 정보
-        const rawProductName = krData?.PRDLST_NM || p?.product_name_ko || p?.product_name || "미등록 상품";
-        const brandInfo      = krData?.BSSH_NM   || p?.brands || "";
-        const fullName       = (brandInfo && !rawProductName.includes(brandInfo))
+        // 셋 다 없으면 진짜 미등록
+        if (!krData && !p && !upcData) {
+            return res.status(200).json({
+                success: false,
+                message: "모든 DB에서 찾을 수 없는 상품입니다. 영양성분표를 직접 확인해주세요 🥲"
+            });
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  기본 제품 정보 (C005 → OFF → UPCitemdb 우선순위)
+        // ══════════════════════════════════════════════════════
+        const rawProductName =
+            krData?.PRDLST_NM ||
+            p?.product_name_ko ||
+            p?.product_name ||
+            upcData?.title ||      // ← UPCitemdb 제품명 (영문)
+            "미등록 상품";
+
+        const brandInfo =
+            krData?.BSSH_NM ||
+            p?.brands ||
+            upcData?.brand ||      // ← UPCitemdb 브랜드
+            "";
+
+        const fullName = (brandInfo && !rawProductName.includes(brandInfo))
             ? `${brandInfo} ${rawProductName}`.trim() : rawProductName;
 
-        // 원산지 / 원재료명
+        // ══════════════════════════════════════════════════════
+        //  원산지 / 원재료명
+        // ══════════════════════════════════════════════════════
         let originText = "제품 라벨 확인 필요";
         if (krData?.ORPLC_INFO?.trim())                          originText = krData.ORPLC_INFO.trim();
         else if (p?.origins?.trim())                             originText = p.origins.trim();
@@ -87,29 +126,28 @@ module.exports = async (req, res) => {
         let ingredients = "";
         if (krData?.RAWMTRL_NM?.trim()) ingredients = krData.RAWMTRL_NM.trim().toLowerCase();
         else if (p)                     ingredients = (p.ingredients_text_ko || p.ingredients_text || "").toLowerCase();
+        // UPCitemdb는 원재료 없음 — description만 있음
 
         // ══════════════════════════════════════════════════════
         //  3단계: 공공데이터포털 식품영양성분DB
-        //  제품명으로 검색 → 당류(NUTR_CONT6)/나트륨(NUTR_CONT12) 핵심
         // ══════════════════════════════════════════════════════
         let dgData = null;
         try {
-            // 제품명에서 한글만 추출해서 검색 정확도 향상
             const searchName = rawProductName.replace(/[a-zA-Z]/g, "").trim() || rawProductName;
-            const encoded    = encodeURIComponent(searchName);
-            const dgUrl = `https://apis.data.go.kr/1471000/FoodNtrIrdntInfoService1/getFoodNtrItdntList1?serviceKey=${DATA_GO_KEY}&pageNo=1&numOfRows=10&type=json&FOOD_NM_KR=${encoded}`;
-            const r = await fetch(dgUrl, { signal: AbortSignal.timeout(5000) });
-            const j = await r.json();
-            const items = j?.body?.items || j?.response?.body?.items || [];
-            if (items.length > 0) {
-                // 제조사명 또는 제품명 가장 유사한 항목 우선
-                const brand = (brandInfo || "").replace(/[㈜(주)]/g, "").trim();
-                const exact = items.find(item =>
-                    (item.FOOD_NM_KR || "").includes(searchName) ||
-                    (brand && (item.MAKER_NM || "").includes(brand))
-                );
-                dgData = exact || items[0];
-                console.log("data.go.kr 매칭:", dgData?.FOOD_NM_KR, "/", dgData?.MAKER_NM);
+            if (searchName && searchName !== "미등록 상품") {
+                const encoded = encodeURIComponent(searchName);
+                const dgUrl = `https://apis.data.go.kr/1471000/FoodNtrIrdntInfoService1/getFoodNtrItdntList1?serviceKey=${DATA_GO_KEY}&pageNo=1&numOfRows=10&type=json&FOOD_NM_KR=${encoded}`;
+                const r = await fetch(dgUrl, { signal: AbortSignal.timeout(5000) });
+                const j = await r.json();
+                const items = j?.body?.items || j?.response?.body?.items || [];
+                if (items.length > 0) {
+                    const brand = (brandInfo || "").replace(/[㈜(주)]/g, "").trim();
+                    const exact = items.find(item =>
+                        (item.FOOD_NM_KR || "").includes(searchName) ||
+                        (brand && (item.MAKER_NM || "").includes(brand))
+                    );
+                    dgData = exact || items[0];
+                }
             }
         } catch (e) { console.log("data.go.kr 실패:", e.message); }
 
@@ -117,8 +155,7 @@ module.exports = async (req, res) => {
         //  4단계: 식약처 I2570 — C005 미등록이고 dgData도 없을 때
         // ══════════════════════════════════════════════════════
         let krData2 = null;
-        const needI2570 = !krData && !dgData;
-        if (needI2570 && rawProductName !== "미등록 상품") {
+        if (!krData && !dgData && rawProductName !== "미등록 상품") {
             try {
                 const searchName = rawProductName.replace(/[a-zA-Z]/g, "").trim() || rawProductName;
                 const r = await fetch(
@@ -134,8 +171,7 @@ module.exports = async (req, res) => {
         }
 
         // ══════════════════════════════════════════════════════
-        //  영양성분 — 소스 우선순위에 따라 병합
-        //  C005(원재료/원산지) + data.go.kr(영양성분) 조합이 최적
+        //  영양성분 병합 (소스별 필드번호 다름 — 주의)
         // ══════════════════════════════════════════════════════
         const servingSizeRaw = krData?.SERVING_SIZE || dgData?.SERVING_SIZE || krData2?.SERVING_SIZE || p?.serving_size || null;
         const servingG       = parseSize(servingSizeRaw);
@@ -143,12 +179,10 @@ module.exports = async (req, res) => {
         const netWtG         = parseSize(netWtRaw) || null;
 
         let totalServings = parseNum(krData?.SERVING_TOTAL) || null;
-        if (!totalServings && servingG && netWtG && netWtG > servingG) {
+        if (!totalServings && servingG && netWtG && netWtG > servingG)
             totalServings = Math.round(netWtG / servingG);
-        }
         if (!totalServings) totalServings = 1;
 
-        // OFF 보조
         const n = p?.nutriments || {};
         const offServing = (key100, keyServing) => {
             if (n[keyServing] != null) return n[keyServing];
@@ -156,64 +190,17 @@ module.exports = async (req, res) => {
             return null;
         };
 
-        // ──────────────────────────────────────────────────────
-        //  영양성분 값 추출 (data.go.kr 필드 번호 주의)
-        //  data.go.kr:  NUTR_CONT1=에너지, NUTR_CONT3=단백질
-        //               NUTR_CONT4=지방,   NUTR_CONT5=탄수화물
-        //               NUTR_CONT6=당류,   NUTR_CONT12=나트륨
-        //               NUTR_CONT22=포화지방, NUTR_CONT23=트랜스지방
-        //  C005:        NUTR_CONT1=에너지, NUTR_CONT3=당류
-        //               NUTR_CONT9=나트륨
-        // ──────────────────────────────────────────────────────
+        const kcalPS   = parseNum(krData?.NUTR_CONT1)  ?? parseNum(dgData?.NUTR_CONT1)  ?? parseNum(krData2?.NUTR_CONT1) ?? offServing("energy-kcal_100g","energy-kcal_serving");
+        const carbsPS  = parseNum(krData?.NUTR_CONT2)  ?? parseNum(dgData?.NUTR_CONT5)  ?? parseNum(krData2?.NUTR_CONT2) ?? offServing("carbohydrates_100g","carbohydrates_serving");
+        const sugarsPS = parseNum(krData?.NUTR_CONT3)  ?? parseNum(dgData?.NUTR_CONT6)  ?? parseNum(krData2?.NUTR_CONT3) ?? offServing("sugars_100g","sugars_serving");
+        const fatPS    = parseNum(krData?.NUTR_CONT4)  ?? parseNum(dgData?.NUTR_CONT4)  ?? parseNum(krData2?.NUTR_CONT4) ?? offServing("fat_100g","fat_serving");
+        const transFPS = parseNum(krData?.NUTR_CONT5)  ?? parseNum(dgData?.NUTR_CONT23) ?? offServing("trans-fat_100g","trans-fat_serving");
+        const satFPS   = parseNum(krData?.NUTR_CONT6)  ?? parseNum(dgData?.NUTR_CONT22) ?? offServing("saturated-fat_100g","saturated-fat_serving");
+        const protPS   = parseNum(krData?.NUTR_CONT8)  ?? parseNum(dgData?.NUTR_CONT3)  ?? parseNum(krData2?.NUTR_CONT8) ?? offServing("proteins_100g","proteins_serving");
+        const sodiumPS = parseNum(krData?.NUTR_CONT9)  ?? parseNum(dgData?.NUTR_CONT12) ?? parseNum(krData2?.NUTR_CONT9) ??
+            (n["sodium_serving"] != null ? n["sodium_serving"] * 1000 :
+             n["sodium_100g"]    != null && servingG ? n["sodium_100g"] * 1000 * servingG / 100 : null);
 
-        // 에너지: C005 → data.go.kr → OFF
-        const kcalPS = parseNum(krData?.NUTR_CONT1)
-            ?? parseNum(dgData?.NUTR_CONT1)
-            ?? parseNum(krData2?.NUTR_CONT1)
-            ?? offServing("energy-kcal_100g", "energy-kcal_serving");
-
-        // 탄수화물: C005(CONT2) → data.go.kr(CONT5)
-        const carbsPS = parseNum(krData?.NUTR_CONT2)
-            ?? parseNum(dgData?.NUTR_CONT5)
-            ?? parseNum(krData2?.NUTR_CONT2)
-            ?? offServing("carbohydrates_100g", "carbohydrates_serving");
-
-        // 당류: C005(CONT3) → data.go.kr(CONT6) ★
-        const sugarsPS = parseNum(krData?.NUTR_CONT3)
-            ?? parseNum(dgData?.NUTR_CONT6)
-            ?? parseNum(krData2?.NUTR_CONT3)
-            ?? offServing("sugars_100g", "sugars_serving");
-
-        // 지방: C005(CONT4) → data.go.kr(CONT4)
-        const fatPS = parseNum(krData?.NUTR_CONT4)
-            ?? parseNum(dgData?.NUTR_CONT4)
-            ?? parseNum(krData2?.NUTR_CONT4)
-            ?? offServing("fat_100g", "fat_serving");
-
-        // 트랜스지방: C005(CONT5) → data.go.kr(CONT23)
-        const transFPS = parseNum(krData?.NUTR_CONT5)
-            ?? parseNum(dgData?.NUTR_CONT23)
-            ?? offServing("trans-fat_100g", "trans-fat_serving");
-
-        // 포화지방: C005(CONT6) → data.go.kr(CONT22)
-        const satFPS = parseNum(krData?.NUTR_CONT6)
-            ?? parseNum(dgData?.NUTR_CONT22)
-            ?? offServing("saturated-fat_100g", "saturated-fat_serving");
-
-        // 단백질: C005(CONT8) → data.go.kr(CONT3)
-        const protPS = parseNum(krData?.NUTR_CONT8)
-            ?? parseNum(dgData?.NUTR_CONT3)
-            ?? parseNum(krData2?.NUTR_CONT8)
-            ?? offServing("proteins_100g", "proteins_serving");
-
-        // 나트륨: C005(CONT9, mg) → data.go.kr(CONT12, mg) ★
-        const sodiumPS = parseNum(krData?.NUTR_CONT9)
-            ?? parseNum(dgData?.NUTR_CONT12)
-            ?? parseNum(krData2?.NUTR_CONT9)
-            ?? (n["sodium_serving"] != null ? n["sodium_serving"] * 1000 :
-               n["sodium_100g"]    != null && servingG ? n["sodium_100g"] * 1000 * servingG / 100 : null);
-
-        // 제품 전체 기준 환산
         const toTotal = (v) => v !== null ? Math.round(v * totalServings * 10) / 10 : null;
         const kcalT   = toTotal(kcalPS);
         const carbsT  = toTotal(carbsPS);
@@ -224,7 +211,6 @@ module.exports = async (req, res) => {
         const protT   = toTotal(protPS);
         const sodiumT = toTotal(sodiumPS);
 
-        // 칼로리 표기
         let caloriesText = "열량 정보 없음 (비공개)";
         if (kcalT !== null) {
             const base = netWtRaw ? `${netWtRaw} 전체` : `제품 1개 전체`;
@@ -372,10 +358,12 @@ module.exports = async (req, res) => {
             greenwashingAlert = "🚨 [그린워싱 주의] 마케팅은 '제로/천연'이나, 실제 유해 감미료·화학제가 발견되었습니다.";
 
         const certifications = [];
-        if (krData?.PRDLST_REPORT_NO || krData2?.PRDLST_REPORT_NO) certifications.push("🛡️ 식약처 등록 제품 (보고번호 확인됨)");
+        if (krData?.PRDLST_REPORT_NO || krData2?.PRDLST_REPORT_NO) certifications.push("🛡️ 식약처 등록 제품");
         const allTC = (fullName+ingredients+(p?.labels_tags||[]).join(" ")).toLowerCase();
-        if (allTC.includes("haccp")||allTC.includes("해썹")) certifications.push("식약처 HACCP 시스템 인증");
+        if (allTC.includes("haccp")||allTC.includes("해썹")) certifications.push("식약처 HACCP 인증");
         if (allTC.includes("유기농")||allTC.includes("organic")) certifications.push("유기농(Organic) 인증 🌱");
+        // UPCitemdb에서 온 제품임을 표시
+        if (upcData && !krData && !p) certifications.push("ℹ️ 글로벌 바코드DB 조회 (영양성분 미포함)");
 
         // NOVA
         const novaDesc = { 1:"자연 원재료 (건강식 🟢)", 2:"기본 가공 식재료 (보통 🟡)", 3:"가공식품 (화학첨가물 주의 🟠)", 4:"초가공식품 (화학첨가물 다량 🔴)" };
@@ -385,6 +373,9 @@ module.exports = async (req, res) => {
             const u4c=["과자","라면","탄산음료","아이스크림","햄","소시지","어묵","케첩","마요네즈","스낵","캔디","초콜릿","비스킷","컵라면"];
             const u4i=["합성향료","타르색소","아질산","수크랄로스","아스파탐","아세설팜","안식향산","소르빈산","쇼트닝"];
             if (u4c.some(k=>cat.includes(k))||u4i.some(k=>ing.includes(k))) return 4;
+            // UPCitemdb category 활용
+            const upcCat = (upcData?.category || "").toLowerCase();
+            if (["chips","candy","soda","instant","snack"].some(k=>upcCat.includes(k))) return 4;
             const p3=["음료","빵","면류","통조림","소스","드레싱","잼","요구르트","치즈","두부","김치","젓갈"];
             if (p3.some(k=>cat.includes(k))) return 3;
             return 3;
@@ -393,15 +384,28 @@ module.exports = async (req, res) => {
         const novaGroup = p?.nova_group || estimateNova(krCat, ingredients);
         const nova = `NOVA ${novaGroup} - ${novaDesc[novaGroup]}${p?.nova_group?"" : " (추정)"}`;
 
-        // 이미지
-        const productImage = toFullImage(p?.image_front_url || p?.image_url || p?.image_front_small_url || "");
+        // ══════════════════════════════════════════════════════
+        //  이미지 — UPCitemdb images[] 활용
+        //  UPCitemdb는 고화질 원본 URL 제공 (toFullImage 불필요)
+        // ══════════════════════════════════════════════════════
+        let productImage = "";
+        if (p?.image_front_url || p?.image_url) {
+            // OFF 이미지 (full 치환)
+            productImage = toFullImage(p.image_front_url || p.image_url);
+        } else if (upcData?.images?.length > 0) {
+            // UPCitemdb 이미지 (원본 URL, 고화질)
+            productImage = upcData.images[0];
+        } else if (p?.image_front_small_url) {
+            productImage = toFullImage(p.image_front_small_url);
+        }
 
         // 데이터 출처
         const sources = [];
-        if (krData)  sources.push("식약처 C005");
-        if (dgData)  sources.push("공공데이터포털 식품영양성분DB");
-        if (krData2) sources.push("식약처 I2570");
-        if (p)       sources.push("Open Food Facts");
+        if (krData)   sources.push("식약처 C005");
+        if (dgData)   sources.push("공공데이터포털");
+        if (krData2)  sources.push("식약처 I2570");
+        if (p)        sources.push("Open Food Facts");
+        if (upcData)  sources.push("UPCitemdb");
 
         return res.status(200).json({
             success: true,
@@ -433,8 +437,8 @@ module.exports = async (req, res) => {
                 ? detectedBadObjs
                 : (additives.length > 0
                     ? [{ name: "가벼운 첨가물 일부 포함", risk: "적정 섭취 시 안전" }]
-                    : [{ name: "친환경 원물", risk: "매우 안전 👍" }]),
-            score:          score,
+                    : [{ name: "국내 DB 미등록 — 라벨 확인 권장", risk: "영양성분 정보 없음 ⚠️" }]),
+            score:          upcData && !krData && !p ? 50 : score, // UPCitemdb만 있으면 점수 보류
             scoreBreakdown: scoreBreakdown,
             isScraped:      false,
             allergens:      translatedAllergens,
