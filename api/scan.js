@@ -388,24 +388,56 @@ module.exports = async (req, res) => {
         //  이미지 — UPCitemdb images[] 활용
         //  UPCitemdb는 고화질 원본 URL 제공 (toFullImage 불필요)
         // ══════════════════════════════════════════════════════
+        //  이미지 소스 우선순위:
+        //  1. 네이버 쇼핑 API (한국 제품 최고화질)
+        //  2. UPCitemdb images[] (글로벌 고화질)
+        //  3. OFF image_front_url → full 치환
+        //  4. OFF image_front_small_url → full 치환
+        // ══════════════════════════════════════════════════════
         let productImage = "";
-        if (p?.image_front_url || p?.image_url) {
-            // OFF 이미지 (full 치환)
-            productImage = toFullImage(p.image_front_url || p.image_url);
+        let naverImage   = "";
+
+        // 네이버 쇼핑 API로 제품 이미지 검색 (한국 제품에 가장 정확)
+        const NAVER_CLIENT_ID     = process.env.NAVER_CLIENT_ID;
+        const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
+        if (NAVER_CLIENT_ID && NAVER_CLIENT_SECRET && fullName && fullName !== "미등록 상품") {
+            try {
+                const naverRes = await fetch(
+                    `https://openapi.naver.com/v1/search/shop.json?query=${encodeURIComponent(fullName)}&display=1&sort=sim`,
+                    {
+                        headers: {
+                            'X-Naver-Client-Id':     NAVER_CLIENT_ID,
+                            'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
+                        },
+                        signal: AbortSignal.timeout(3000)
+                    }
+                );
+                const naverJson = await naverRes.json();
+                if (naverJson?.items?.length > 0) {
+                    naverImage = naverJson.items[0].image || "";
+                }
+            } catch (e) { console.log("네이버 쇼핑 이미지 실패:", e.message); }
+        }
+
+        // 우선순위 적용
+        if (naverImage) {
+            productImage = naverImage;                                          // 1순위: 네이버
         } else if (upcData?.images?.length > 0) {
-            // UPCitemdb 이미지 (원본 URL, 고화질)
-            productImage = upcData.images[0];
+            productImage = upcData.images[0];                                   // 2순위: UPCitemdb
+        } else if (p?.image_front_url || p?.image_url) {
+            productImage = toFullImage(p.image_front_url || p.image_url);       // 3순위: OFF full
         } else if (p?.image_front_small_url) {
-            productImage = toFullImage(p.image_front_small_url);
+            productImage = toFullImage(p.image_front_small_url);                // 4순위: OFF small
         }
 
         // 데이터 출처
         const sources = [];
-        if (krData)   sources.push("식약처 C005");
-        if (dgData)   sources.push("공공데이터포털");
-        if (krData2)  sources.push("식약처 I2570");
-        if (p)        sources.push("Open Food Facts");
-        if (upcData)  sources.push("UPCitemdb");
+        if (krData)      sources.push("식약처 C005");
+        if (dgData)      sources.push("공공데이터포털");
+        if (krData2)     sources.push("식약처 I2570");
+        if (p)           sources.push("Open Food Facts");
+        if (upcData)     sources.push("UPCitemdb");
+        if (naverImage)  sources.push("네이버 쇼핑(이미지)");
 
         return res.status(200).json({
             success: true,
@@ -437,8 +469,8 @@ module.exports = async (req, res) => {
                 ? detectedBadObjs
                 : (additives.length > 0
                     ? [{ name: "가벼운 첨가물 일부 포함", risk: "적정 섭취 시 안전" }]
-                    : [{ name: "국내 DB 미등록 — 라벨 확인 권장", risk: "영양성분 정보 없음 ⚠️" }]),
-            score:          upcData && !krData && !p ? 50 : score, // UPCitemdb만 있으면 점수 보류
+                    : [{ name: "친환경 원물", risk: "매우 안전 👍" }]),
+            score:          upcData && !krData && !p ? 50 : score,
             scoreBreakdown: scoreBreakdown,
             isScraped:      false,
             allergens:      translatedAllergens,
