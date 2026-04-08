@@ -214,14 +214,6 @@
             color: #fff;
             border-color: var(--primary);
         }
-            border-radius: 20px;
-            margin-bottom: 15px;
-            padding: 10px;
-            box-sizing: border-box;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            background: #FFF;
-            border: 1px solid #E5E5EA;
-        }
 
         .metrics-grid {
             display: grid;
@@ -549,32 +541,32 @@
                 <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-card" style="padding: 12px 8px;">
                         <div class="metric-title" style="margin-bottom:8px;">당류</div>
-                        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-                            <div id="sugarEmoji"
-                                style="font-size:1.8rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">⚪</div>
-                            <div id="sugarVal"
-                                style="font-weight:900; font-size:0.95rem; color:#1C1C1E; margin-top:2px;">-</div>
-                            <div id="sugarTxt" style="font-size:0.75rem; font-weight:800;">-</div>
+                        <div style="display:flex; flex-direction:row; align-items:center; justify-content:center; gap:6px;">
+                            <div id="sugarEmoji" style="font-size:1.4rem;">⚪</div>
+                            <div>
+                                <div id="sugarVal" style="font-weight:900; font-size:0.9rem; color:#1C1C1E;">-</div>
+                                <div id="sugarTxt" style="font-size:0.7rem; font-weight:800;">-</div>
+                            </div>
                         </div>
                     </div>
                     <div class="metric-card" style="padding: 12px 8px;">
                         <div class="metric-title" style="margin-bottom:8px;">지방</div>
-                        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-                            <div id="fatEmoji"
-                                style="font-size:1.8rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">⚪</div>
-                            <div id="fatVal" style="font-weight:900; font-size:0.95rem; color:#1C1C1E; margin-top:2px;">
-                                -</div>
-                            <div id="fatTxt" style="font-size:0.75rem; font-weight:800;">-</div>
+                        <div style="display:flex; flex-direction:row; align-items:center; justify-content:center; gap:6px;">
+                            <div id="fatEmoji" style="font-size:1.4rem;">⚪</div>
+                            <div>
+                                <div id="fatVal" style="font-weight:900; font-size:0.9rem; color:#1C1C1E;">-</div>
+                                <div id="fatTxt" style="font-size:0.7rem; font-weight:800;">-</div>
+                            </div>
                         </div>
                     </div>
                     <div class="metric-card" style="padding: 12px 8px;">
                         <div class="metric-title" style="margin-bottom:8px;">나트륨</div>
-                        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-                            <div id="sodiumEmoji"
-                                style="font-size:1.8rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">⚪</div>
-                            <div id="sodiumVal"
-                                style="font-weight:900; font-size:0.95rem; color:#1C1C1E; margin-top:2px;">-</div>
-                            <div id="sodiumTxt" style="font-size:0.75rem; font-weight:800;">-</div>
+                        <div style="display:flex; flex-direction:row; align-items:center; justify-content:center; gap:6px;">
+                            <div id="sodiumEmoji" style="font-size:1.4rem;">⚪</div>
+                            <div>
+                                <div id="sodiumVal" style="font-weight:900; font-size:0.9rem; color:#1C1C1E;">-</div>
+                                <div id="sodiumTxt" style="font-size:0.7rem; font-weight:800;">-</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -688,7 +680,7 @@
             document.getElementById('brandText').textContent = data.brand || '브랜드 미등록';
             document.getElementById('originText').textContent = data.origin || '정보 없음';
             document.getElementById('productName').textContent = data.productName;
-            // ── 이미지 탭 처리
+            // ── 이미지 탭 처리 + 깨진 이미지 대체
             const frontImg = document.getElementById('productImg');
             const nutriImg = document.getElementById('nutriImg');
             const ingrImg  = document.getElementById('ingrImg');
@@ -698,9 +690,24 @@
             [frontImg, nutriImg, ingrImg].forEach(el => el.style.display = 'none');
             [tabNutri, tabIngr].forEach(el => el.style.display = 'none');
             tabGroup.style.display = 'none';
-            if (data.image)           { frontImg.src = data.image;           frontImg.style.display = 'block'; tabGroup.style.display = 'flex'; }
-            if (data.imageNutrition)  { nutriImg.src = data.imageNutrition;  tabNutri.style.display = 'inline-block'; tabGroup.style.display = 'flex'; }
-            if (data.imageIngredients){ ingrImg.src  = data.imageIngredients;tabIngr.style.display  = 'inline-block'; tabGroup.style.display = 'flex'; }
+
+            // 이미지 로드 실패 시 네이버 쇼핑 검색 페이지로 대체
+            const setImgWithFallback = (imgEl, src, fallbackName) => {
+                if (!src) return;
+                imgEl.onerror = () => {
+                    // 네이버 쇼핑 검색 페이지를 iframe 대신 링크로 안내
+                    imgEl.style.display = 'none';
+                    const notice = document.createElement('div');
+                    notice.style.cssText = 'text-align:center;padding:20px;background:#f9f9f9;border-radius:16px;margin-bottom:15px;';
+                    notice.innerHTML = `<div style="font-size:2rem;">📦</div><div style="font-size:0.85rem;color:#8E8E93;margin-top:8px;">이미지 로드 실패</div><a href="https://search.shopping.naver.com/search/all?query=${encodeURIComponent(fallbackName)}" target="_blank" style="display:inline-block;margin-top:10px;padding:8px 16px;background:#03C75A;color:#fff;border-radius:20px;font-size:0.8rem;font-weight:800;text-decoration:none;">🛒 네이버에서 제품 보기</a>`;
+                    imgEl.parentNode.insertBefore(notice, imgEl);
+                };
+                imgEl.src = src;
+            };
+
+            if (data.image)            { setImgWithFallback(frontImg, data.image, data.fullName); frontImg.style.display = 'block'; tabGroup.style.display = 'flex'; }
+            if (data.imageNutrition)   { setImgWithFallback(nutriImg, data.imageNutrition, data.fullName); tabNutri.style.display = 'inline-block'; tabGroup.style.display = 'flex'; }
+            if (data.imageIngredients) { setImgWithFallback(ingrImg, data.imageIngredients, data.fullName); tabIngr.style.display  = 'inline-block'; tabGroup.style.display = 'flex'; }
 
             // ── 인증 마크
             const certCont = document.getElementById('certificationContainer');
@@ -722,15 +729,16 @@
                 document.getElementById('greenwashingText').textContent = data.greenwashingAlert;
             } else { gwCont.style.display = 'none'; }
 
-            // ── Nutri-Score
+            // ── Nutri-Score (UNKNOWN, null, 빈값 전부 숨김)
             const scoreCont = document.getElementById('nutriScoreContainer');
             const scoreBadge = document.getElementById('nutriScoreBadge');
             const scoreLetter = document.getElementById('nutriScoreLetter');
-            if (data.nutriGrade) {
+            const validGrades = ['A','B','C','D','E'];
+            if (data.nutriGrade && validGrades.includes(data.nutriGrade.toUpperCase())) {
                 scoreCont.style.display = 'block';
-                scoreLetter.textContent = data.nutriGrade;
+                scoreLetter.textContent = data.nutriGrade.toUpperCase();
                 const colors = { 'A': '#008b4c', 'B': '#80c142', 'C': '#feca0b', 'D': '#f58220', 'E': '#ef3e22' };
-                scoreBadge.style.background = colors[data.nutriGrade] || '#8E8E93';
+                scoreBadge.style.background = colors[data.nutriGrade.toUpperCase()] || '#8E8E93';
             } else { scoreCont.style.display = 'none'; }
 
             // ── 타겟 경고
@@ -821,8 +829,11 @@
             document.getElementById('nova').textContent = data.nova || '미분류';
             document.getElementById('nova').className = (data.nova && data.nova.includes('초가공')) ? 'li-bad' : 'li-allergy';
 
-            populateList('badIngredients', data.badIngredients,
-                String(data.badIngredients).includes('깨끗한') ? 'li-good' : 'li-bad');
+            // 유해성분: 배열 내 객체의 name 필드로 안전/위험 판별
+            const isGood = Array.isArray(data.badIngredients) &&
+                data.badIngredients.length === 1 &&
+                (data.badIngredients[0].name === '친환경 원물' || data.badIngredients[0].name === '국내 DB 미등록 — 라벨 확인 권장');
+            populateList('badIngredients', data.badIngredients, isGood ? 'li-good' : 'li-bad');
             populateList('allergens', data.allergens, 'li-allergy');
 
             // ── 쇼핑 버튼
