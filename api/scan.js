@@ -44,7 +44,41 @@ const BRAND_EN_KO = {
     "pulmuone": "풀무원", "daesang": "대상", "bingrae": "빙그레",
     "crown": "크라운", "binggrae": "빙그레", "maeil": "매일",
     "namyang": "남양", "woongjin": "웅진", "mondelez": "몬델리즈",
+    "hy": "한국야쿠르트", "yakult": "야쿠르트", "spc": "에스피씨",
+    "paris baguette": "파리바게뜨", "baskin robbins": "배스킨라빈스",
 };
+
+// ✅ 영한 제품명 대조표 — 영문 제품명으로 한글 검색어 추출
+const PRODUCT_EN_KO = {
+    "dosirak": "도시락", "shin ramyun": "신라면", "shin ramen": "신라면",
+    "buldak": "불닭", "fire noodle": "불닭볶음면", "chapagetti": "짜파게티",
+    "neoguri": "너구리", "yukgaejang": "육개장", "samyang ramen": "삼양라면",
+    "ansung tang myun": "안성탕면", "ansungtangmyun": "안성탕면",
+    "jin ramen": "진라면", "sesame ramen": "참깨라면",
+    "bibim men": "비빔면", "bibimmyun": "비빔면",
+    "chal bibim": "쫄비빔면", "paldo bibim": "팔도비빔면",
+    "kokomen": "꼬꼬면", "noodle soup": "라면",
+    "honey butter": "허니버터", "pepero": "빼빼로",
+    "choco pie": "초코파이", "homerun ball": "홈런볼",
+    "binch": "빈츠", "dda ddah": "따따",
+    "jolly pong": "쫄리팡", "pocky": "포키",
+    "sweet potato": "고구마", "green tea": "녹차",
+    "banana milk": "바나나맛우유", "strawberry milk": "딸기맛우유",
+};
+
+// 영문 제품명 → 한글 제품명 변환 함수
+function toKoreanName(englishName, brandEnglish) {
+    const nameLow = (englishName || "").toLowerCase().trim();
+    // 1순위: 제품명 대조표 직접 매칭
+    for (const [en, ko] of Object.entries(PRODUCT_EN_KO)) {
+        if (nameLow.includes(en)) return ko;
+    }
+    // 2순위: 한글 브랜드 + 영문 제품명 (브랜드만이라도)
+    const brandLow = (brandEnglish || "").toLowerCase().trim();
+    const brandKo  = BRAND_EN_KO[brandLow];
+    if (brandKo) return brandKo; // 브랜드명으로라도 검색
+    return null; // 변환 불가
+}
 
 module.exports = async (req, res) => {
     const { barcode } = req.query;
@@ -100,7 +134,7 @@ module.exports = async (req, res) => {
         }
 
         // ══════════════════════════════════════════════════════
-        //  기본 제품 정보
+        //  기본 제품 정보 + 한글 제품명 추출
         // ══════════════════════════════════════════════════════
         const rawProductName =
             krData?.PRDLST_NM ||
@@ -116,6 +150,21 @@ module.exports = async (req, res) => {
         const fullName = (brandInfo && !rawProductName.includes(brandInfo))
             ? `${brandInfo} ${rawProductName}`.trim() : rawProductName;
 
+        // ✅ 한글 검색어 추출 — 영문 제품명도 한글로 변환
+        const isEnglishName = /^[a-zA-Z\s\-_0-9]+$/.test(rawProductName.trim());
+        let koreanSearchName = null;
+        if (krData) {
+            // C005는 이미 한글
+            koreanSearchName = krData.PRDLST_NM;
+        } else if (isEnglishName) {
+            // 영문 → 한글 변환 시도
+            koreanSearchName = toKoreanName(rawProductName, brandInfo);
+        } else {
+            // 한글 제품명에서 영문 제거
+            const cleaned = rawProductName.replace(/[a-zA-Z]/g, "").trim();
+            koreanSearchName = cleaned || rawProductName;
+        }
+
         // 원산지 / 원재료명
         let originText = "제품 라벨 확인 필요";
         if (krData?.ORPLC_INFO?.trim())                          originText = krData.ORPLC_INFO.trim();
@@ -128,28 +177,41 @@ module.exports = async (req, res) => {
 
         // ══════════════════════════════════════════════════════
         //  STEP 4: 공공데이터포털 — 영양성분 핵심
-        //  ✅ 수정: 브랜드명 영→한 변환 후 다중 검색 시도
+        //  koreanSearchName 기반으로 다중 검색 시도
         // ══════════════════════════════════════════════════════
         let dgData = null;
 
-        // 검색어 후보 목록 생성
-        const buildSearchCandidates = (productName, brand) => {
-            const candidates = [];
-            // 1순위: 제품명 (영문 제거)
-            const nameKo = productName.replace(/[a-zA-Z]/g, "").trim();
-            if (nameKo) candidates.push(nameKo);
-            // 2순위: 한글 브랜드 + 제품명
-            const brandLow = (brand || "").toLowerCase().trim();
-            const brandKo  = BRAND_EN_KO[brandLow] || brand || "";
-            const brandKoClean = brandKo.replace(/[㈜(주)\s]/g, "").trim();
-            if (brandKoClean && nameKo) candidates.push(`${brandKoClean} ${nameKo}`);
-            // 3순위: 브랜드만
-            if (brandKoClean) candidates.push(brandKoClean);
-            return [...new Set(candidates)]; // 중복 제거
+        // 검색어 후보 목록 생성 (한글 우선, 다중 시도)
+        const buildSearchCandidates = () => {
+            const candidates = new Set();
+            const brandLow    = (brandInfo || "").toLowerCase().trim();
+            const brandKo     = BRAND_EN_KO[brandLow] || "";
+            const brandClean  = brandKo.replace(/[㈜(주)\s]/g, "").trim();
+
+            // koreanSearchName이 있으면 최우선
+            if (koreanSearchName) {
+                candidates.add(koreanSearchName);
+                // 브랜드 + 한글 제품명 조합
+                if (brandClean && !koreanSearchName.includes(brandClean)) {
+                    candidates.add(`${brandClean} ${koreanSearchName}`);
+                }
+            }
+            // 한글 제품명 직접 추출 (영문 제거)
+            const nameKoRaw = rawProductName.replace(/[a-zA-Z]/g, "").trim();
+            if (nameKoRaw) candidates.add(nameKoRaw);
+            // 브랜드 한글만
+            if (brandClean) candidates.add(brandClean);
+
+            return [...candidates].filter(c => c.length > 0);
         };
 
-        const dgCandidates = buildSearchCandidates(rawProductName, brandInfo);
+        const dgCandidates = buildSearchCandidates();
         console.log("dgData 검색 후보:", dgCandidates);
+
+        const brandLow_   = (brandInfo || "").toLowerCase().trim();
+        const brandKo_    = BRAND_EN_KO[brandLow_] || brandInfo || "";
+        const brandClean_ = brandKo_.replace(/[㈜(주)\s]/g, "").trim();
+        const nameKo_     = (koreanSearchName || rawProductName.replace(/[a-zA-Z]/g, "")).trim();
 
         for (const candidate of dgCandidates) {
             if (dgData) break;
@@ -161,26 +223,20 @@ module.exports = async (req, res) => {
                 const j = await r.json();
                 const items = j?.body?.items || j?.response?.body?.items || [];
                 if (items.length > 0) {
-                    // 브랜드명 영→한 변환하여 매칭 강화
-                    const brandLow    = (brandInfo || "").toLowerCase().trim();
-                    const brandKo     = BRAND_EN_KO[brandLow] || brandInfo || "";
-                    const brandClean  = brandKo.replace(/[㈜(주)\s]/g, "").trim();
-                    const nameKo      = rawProductName.replace(/[a-zA-Z]/g, "").trim();
-
-                    // 매칭 점수로 최선 항목 선택
+                    // 점수 기반 최선 항목 선택
                     let best = null, bestScore = -1;
                     for (const item of items) {
                         const nm = (item.FOOD_NM_KR || "").toLowerCase();
                         const mk = (item.MAKER_NM  || "").toLowerCase();
                         let score = 0;
-                        if (nameKo    && nm.includes(nameKo.toLowerCase()))    score += 3;
-                        if (brandClean && mk.includes(brandClean.toLowerCase())) score += 2;
-                        if (brandClean && nm.includes(brandClean.toLowerCase())) score += 1;
+                        if (nameKo_    && nm.includes(nameKo_.toLowerCase()))     score += 3;
+                        if (brandClean_ && mk.includes(brandClean_.toLowerCase())) score += 2;
+                        if (brandClean_ && nm.includes(brandClean_.toLowerCase())) score += 1;
                         if (score > bestScore) { bestScore = score; best = item; }
                     }
                     if (bestScore > 0) {
                         dgData = best;
-                        console.log(`dgData 매칭 성공 (점수${bestScore}):`, dgData.FOOD_NM_KR, "/", dgData.MAKER_NM);
+                        console.log(`dgData 매칭(점수${bestScore}):`, dgData.FOOD_NM_KR, "/", dgData.MAKER_NM);
                     }
                 }
             } catch (e) { console.log(`data.go.kr 실패(${candidate}):`, e.message); }
@@ -192,7 +248,7 @@ module.exports = async (req, res) => {
         let krData2 = null;
         if (!krData && !dgData && rawProductName !== "미등록 상품") {
             try {
-                const nameKo = rawProductName.replace(/[a-zA-Z]/g, "").trim() || rawProductName;
+                const nameKo = koreanSearchName || rawProductName.replace(/[a-zA-Z]/g, "").trim() || rawProductName;
                 const r = await fetch(
                     `http://openapi.foodsafetykorea.go.kr/api/${FOODSAFETY_KEY}/I2570/json/1/10/PRDLST_NM=${encodeURIComponent(nameKo)}`,
                     { signal: AbortSignal.timeout(4000) }
@@ -417,26 +473,52 @@ module.exports = async (req, res) => {
         const nova = `NOVA ${novaGroup} - ${novaDesc[novaGroup]}${p?.nova_group?"" : " (추정)"}`;
 
         // ══════════════════════════════════════════════════════
-        //  이미지 우선순위
-        //  1. 네이버 쇼핑 API (환경변수 있을 때)
-        //  2. UPCitemdb images[] (고화질 원본)
-        //  3. OFF full 이미지
-        //  4. OFF small → full 치환
+        //  이미지 — 네이버 쇼핑 API 우선 (한글 라벨, 고화질, 한국 CDN)
+        //  검색어: 한글 브랜드+제품명 사용 (영문 브랜드명 제외)
         // ══════════════════════════════════════════════════════
         let productImage = "";
         let naverImage   = "";
 
         const NAVER_ID     = process.env.NAVER_CLIENT_ID;
         const NAVER_SECRET = process.env.NAVER_CLIENT_SECRET;
-        if (NAVER_ID && NAVER_SECRET && fullName && fullName !== "미등록 상품") {
-            try {
-                const nr = await fetch(
-                    `https://openapi.naver.com/v1/search/shop.json?query=${encodeURIComponent(fullName)}&display=1&sort=sim`,
-                    { headers: { 'X-Naver-Client-Id': NAVER_ID, 'X-Naver-Client-Secret': NAVER_SECRET }, signal: AbortSignal.timeout(3000) }
-                );
-                const nj = await nr.json();
-                if (nj?.items?.length > 0) naverImage = nj.items[0].image || "";
-            } catch (e) { console.log("네이버 이미지 실패:", e.message); }
+
+        if (NAVER_ID && NAVER_SECRET) {
+            // 네이버 검색어: 한글 브랜드 + 한글 제품명 조합 (영문 제외)
+            const brandLowN  = (brandInfo || "").toLowerCase().trim();
+            const brandKoN   = BRAND_EN_KO[brandLowN] || "";
+            const brandCleanN = brandKoN.replace(/[㈜(주)\s]/g, "").trim();
+            const nameKoN    = koreanSearchName || rawProductName.replace(/[a-zA-Z]/g, "").trim();
+
+            // 검색어 우선순위: "팔도 도시락" > "도시락" > "팔도"
+            const naverQueries = [];
+            if (brandCleanN && nameKoN) naverQueries.push(`${brandCleanN} ${nameKoN}`);
+            if (nameKoN)               naverQueries.push(nameKoN);
+            if (brandCleanN)           naverQueries.push(brandCleanN);
+
+            for (const query of naverQueries) {
+                if (naverImage) break;
+                try {
+                    const nr = await fetch(
+                        `https://openapi.naver.com/v1/search/shop.json?query=${encodeURIComponent(query)}&display=3&sort=sim`,
+                        {
+                            headers: {
+                                'X-Naver-Client-Id':     NAVER_ID,
+                                'X-Naver-Client-Secret': NAVER_SECRET,
+                            },
+                            signal: AbortSignal.timeout(3000)
+                        }
+                    );
+                    const nj = await nr.json();
+                    if (nj?.items?.length > 0) {
+                        // 제목에 제품명 포함된 항목 우선 선택
+                        const best = nj.items.find(item =>
+                            nameKoN && item.title.replace(/<[^>]+>/g,'').includes(nameKoN)
+                        ) || nj.items[0];
+                        naverImage = best.image || "";
+                        if (naverImage) console.log(`네이버 이미지 획득 (검색어: '${query}')`);
+                    }
+                } catch (e) { console.log(`네이버 이미지 실패(${query}):`, e.message); }
+            }
         }
 
         if      (naverImage)                productImage = naverImage;
